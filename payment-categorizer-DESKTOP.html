@@ -1,0 +1,3430 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kategorizátor platieb</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Tooltip pre dlhé texty */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .tooltip-text {
+            visibility: hidden;
+            background-color: #1f2937;
+            color: white;
+            text-align: left;
+            padding: 8px 12px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 0;
+            white-space: normal;
+            max-width: 500px;
+            min-width: 250px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1f2937 transparent transparent transparent;
+        }
+        
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+        }
+        
+        /* Wrap text v bunkách - ellipsis */
+        .wrap-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px;
+            display: inline-block;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+    
+
+        /* Excluded categories panel */
+        .excluded-category {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+        
+        .category-checkbox {
+            cursor: pointer;
+        }
+        
+        .category-checkbox:hover {
+            background-color: #f3f4f6;
+        }
+    
+
+        /* Excluded categories panel */
+        .excluded-category {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+        
+        .category-checkbox {
+            cursor: pointer;
+        }
+        
+        .category-checkbox:hover {
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-4">
+        <div class="max-w-7xl mx-auto">
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h1 class="text-3xl font-bold text-gray-800 mb-6">💳 Kategorizátor platieb</h1>
+                
+                <!-- Načítanie pravidiel -->
+                <div class="mb-6 bg-purple-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">📋 Pravidlá kategorizácie</h3>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button onclick="loadRulesFromOneDrive()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            ☁️ Načítať z GitHubu
+                        </button>
+                        <label class="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 cursor-pointer transition-colors">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Načítať lokálny súbor
+                            <input type="file" id="rules-input" accept=".json" class="hidden">
+                        </label>
+                    </div>
+                    <div id="rules-status" class="mt-2 text-sm text-gray-600"></div>
+                </div>
+
+                <!-- Správa účtov odkaz -->
+                <div class="mb-6 bg-orange-50 p-4 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-700 mb-1">💳 Účty</h3>
+                            <p class="text-sm text-gray-600">Spravuj svoje účty pred nahratím transakcií</p>
+                        </div>
+                        <button onclick="showAccountsManager()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+                            ⚙️ Správa účtov
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Načítanie transakcií -->
+                <div id="upload-section" class="mb-6">
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <svg class="mx-auto mb-4 text-gray-400" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold text-gray-700 mb-2">Nahrajte súbor s transakciami</h3>
+                        <p class="text-gray-500 mb-4">Podporované formáty: Excel (.xlsx, .xls)</p>
+                        
+                        <!-- Výber účtu -->
+                        <div class="mb-4 max-w-md mx-auto">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">💳 Vyber účet pre import:</label>
+                            <div class="flex gap-2">
+                                <select id="account-select" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                                    <option value="">-- Vyber účet --</option>
+                                </select>
+                                <button onclick="showAccountsManager()" class="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 text-sm">
+                                    ⚙️ Správa
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <label class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Vybrať súbor
+                            <input type="file" id="file-input" accept=".xlsx,.xls" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Správa účtov (mimo data-section, aby bola vždy prístupná) -->
+                <div id="accounts-manager" class="hidden mb-6 bg-orange-50 p-6 rounded-lg border-2 border-orange-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-orange-800">💳 Správa účtov</h3>
+                        <button onclick="hideAccountsManager()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                            ✕ Zavrieť
+                        </button>
+                    </div>
+
+                    <!-- Pridanie nového účtu -->
+                    <div class="bg-white p-4 rounded-lg mb-4">
+                        <h4 class="font-semibold mb-3 text-gray-800">➕ Pridať účet</h4>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-account-name" placeholder="Názov účtu (napr. Bežný účet mBank)" 
+                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                            <button onclick="addAccount()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+                                Pridať
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Zoznam účtov -->
+                    <div class="bg-white p-4 rounded-lg">
+                        <h4 class="font-semibold mb-3 text-gray-800">📋 Aktuálne účty</h4>
+                        <div id="accounts-list" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Export/Import účtov -->
+                    <div class="bg-white p-4 rounded-lg mt-4">
+                        <h4 class="font-semibold mb-3 text-gray-800">💾 Export/Import</h4>
+                        <div class="flex gap-2">
+                            <button onclick="exportAccounts()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                📥 Exportovať účty
+                            </button>
+                            <label class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                                📤 Importovať účty
+                                <input type="file" id="accounts-import" accept=".json" class="hidden" onchange="importAccounts(event)">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel pre vylúčenie kategórií -->
+                <div id="exclude-categories-panel" class="hidden mb-6 bg-red-50 p-6 rounded-lg border-2 border-red-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-red-800">🚫 Vylúčiť kategórie z analýzy</h3>
+                        <button onclick="hideExcludeCategoriesPanel()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                            ✕ Zavrieť
+                        </button>
+                    </div>
+                    
+                    <div class="bg-white p-4 rounded-lg mb-4">
+                        <p class="text-sm text-gray-600 mb-3">
+                            Vylúčené kategórie sa nebudú počítať do štatistík, grafov ani celkových súm. 
+                            Transakcie ostanú v tabuľke viditeľné.
+                        </p>
+                        <div id="exclude-categories-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button onclick="excludeAll()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            Vylúčiť všetko
+                        </button>
+                        <button onclick="includeAll()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            Zahrnúť všetko
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel pre vylúčenie kategórií -->
+                <div id="exclude-categories-panel" class="hidden mb-6 bg-red-50 p-6 rounded-lg border-2 border-red-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-red-800">🚫 Vylúčiť kategórie z analýzy</h3>
+                        <button onclick="hideExcludeCategoriesPanel()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                            ✕ Zavrieť
+                        </button>
+                    </div>
+                    
+                    <div class="bg-white p-4 rounded-lg mb-4">
+                        <p class="text-sm text-gray-600 mb-3">
+                            Vylúčené kategórie sa nebudú počítať do štatistík, grafov ani celkových súm. 
+                            Transakcie ostanú v tabuľke, ale neovplyvnia analýzu.
+                        </p>
+                        <div id="exclude-categories-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button onclick="excludeAll()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            Vylúčiť všetko
+                        </button>
+                        <button onclick="includeAll()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            Zahrnúť všetko
+                        </button>
+                    </div>
+                </div>
+
+                <div id="data-section" class="hidden">
+                    <!-- Info o súbore -->
+                    <div class="mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <svg class="text-blue-600" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <div>
+                                        <p class="font-semibold text-gray-800" id="file-name"></p>
+                                        <p class="text-sm text-gray-600" id="payment-count"></p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Nahrať ďalší súbor -->
+                            <div class="border-t border-blue-200 pt-4">
+                                <h4 class="text-sm font-semibold text-gray-700 mb-2">📂 Nahrať ďalší súbor</h4>
+                                <div class="flex gap-2 items-end">
+                                    <div class="flex-1">
+                                        <label class="block text-xs text-gray-600 mb-1">Vyber účet:</label>
+                                        <select id="account-select-2" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                                            <option value="">-- Vyber účet --</option>
+                                        </select>
+                                    </div>
+                                    <label class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
+                                        Vybrať súbor
+                                        <input type="file" id="file-input-2" accept=".xlsx,.xls" class="hidden">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Celkové štatistiky -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600">Celkový počet</p>
+                            <p class="text-2xl font-bold text-blue-600" id="total-count">0</p>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600">Výdavky</p>
+                            <p class="text-2xl font-bold text-red-600" id="total-expenses">0.00 €</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600">Príjmy</p>
+                            <p class="text-2xl font-bold text-green-600" id="total-income">0.00 €</p>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600">Kategorizované</p>
+                            <p class="text-2xl font-bold text-purple-600" id="categorized-count">0</p>
+                        </div>
+                    </div>
+
+                    <!-- Tlačidlá zobrazení -->
+                    <div class="flex gap-2 mb-4 flex-wrap">
+                        <button onclick="setViewMode('all')" id="btn-view-all" class="px-4 py-2 rounded-lg transition-colors bg-blue-600 text-white">
+                            Všetky transakcie
+                        </button>
+                        <button onclick="setViewMode('monthly')" id="btn-view-monthly" class="px-4 py-2 rounded-lg transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                            📅 Mesačný prehľad
+                        </button>
+                        <button onclick="setViewMode('yearly')" id="btn-view-yearly" class="px-4 py-2 rounded-lg transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                            📊 Ročný prehľad
+                        </button>
+                        <button onclick="showRulesManager()" class="px-4 py-2 rounded-lg transition-colors bg-green-100 text-green-700 hover:bg-green-200">
+                            🎯 Správa pravidiel
+                        </button>
+                        <button onclick="showHierarchyManager()" class="px-4 py-2 rounded-lg transition-colors bg-purple-100 text-purple-700 hover:bg-purple-200">
+                            ⚙️ Správa kategórií
+                        </button>
+                        <button onclick="showAccountsManager()" class="px-4 py-2 rounded-lg transition-colors bg-orange-100 text-orange-700 hover:bg-orange-200">
+                            💳 Správa účtov
+                        </button>
+                        <button onclick="showExcludeCategoriesPanel()" class="px-4 py-2 rounded-lg transition-colors bg-red-100 text-red-700 hover:bg-red-200 ml-auto">
+                            🚫 Vylúčiť kategórie
+                        </button>
+                    </div>
+
+                    <!-- Správa pravidiel -->
+                    <div id="rules-manager" class="hidden mb-6 bg-green-50 p-6 rounded-lg border-2 border-green-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-green-800">🎯 Správa pravidiel kategorizácie</h3>
+                            <button onclick="hideRulesManager()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                                ✕ Zavrieť
+                            </button>
+                        </div>
+
+                        <!-- Pridanie nového pravidla -->
+                        <div class="bg-white p-4 rounded-lg mb-4">
+                            <h4 class="font-semibold mb-3 text-gray-800">➕ Pridať pravidlo</h4>
+                            
+                            <!-- Typ pravidla -->
+                            <div class="mb-3">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="rule-mode" value="simple" checked onchange="toggleRuleMode()" class="mr-2">
+                                    <span class="font-medium">Jednoduché pravidlo (OR)</span>
+                                </label>
+                                <label class="inline-flex items-center cursor-pointer ml-6">
+                                    <input type="radio" name="rule-mode" value="and" onchange="toggleRuleMode()" class="mr-2">
+                                    <span class="font-medium">AND pravidlo (obe podmienky)</span>
+                                </label>
+                            </div>
+
+                            <!-- Jednoduché pravidlo -->
+                            <div id="simple-rule" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <select id="rule-category" class="px-3 py-2 border border-gray-300 rounded-lg">
+                                    <option value="">-- Vyber kategóriu --</option>
+                                </select>
+                                <input type="text" id="rule-keyword" placeholder="Kľúčové slovo (napr. TESCO)" 
+                                       class="px-3 py-2 border border-gray-300 rounded-lg">
+                                <select id="rule-type" class="px-3 py-2 border border-gray-300 rounded-lg">
+                                    <option value="keyword">Kľúčové slovo</option>
+                                    <option value="transactionType">Typ transakcie</option>
+                                </select>
+                                <button onclick="addSimpleRule()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                    Pridať
+                                </button>
+                            </div>
+
+                            <!-- AND pravidlo -->
+                            <div id="and-rule" class="hidden">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                    <select id="and-rule-category" class="px-3 py-2 border border-gray-300 rounded-lg">
+                                        <option value="">-- Vyber kategóriu --</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Kľúčové slovo v popise:</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" id="and-keyword" placeholder="napr. SHELL" 
+                                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                            <label class="inline-flex items-center px-3 py-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
+                                                <input type="checkbox" id="and-keyword-regex" class="mr-2">
+                                                <span class="text-sm">Regex</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Typ transakcie:</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" id="and-type" placeholder="napr. POS" 
+                                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                            <label class="inline-flex items-center px-3 py-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
+                                                <input type="checkbox" id="and-type-regex" class="mr-2">
+                                                <span class="text-sm">Regex</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button onclick="addAndRule()" class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                    Pridať AND pravidlo
+                                </button>
+                            </div>
+
+                            <p class="text-xs text-gray-500 mt-2">
+                                💡 <strong>Jednoduché:</strong> Kľúčové slová sú case-insensitive a bez diakritiky<br>
+                                💡 <strong>AND:</strong> Obe podmienky musia byť splnené (napr. SHELL A typ POS)<br>
+                                💡 <strong>Regex:</strong> Pokročilé vzory (napr. ^SHELL.*$ alebo POS|CARD)
+                            </p>
+                        </div>
+
+                        <!-- Zoznam pravidiel -->
+                        <div class="bg-white p-4 rounded-lg mb-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="font-semibold text-gray-800">📋 Aktuálne pravidlá</h4>
+                                <input type="text" id="rules-search" placeholder="🔍 Hľadať..." 
+                                       oninput="filterRulesList()"
+                                       class="px-3 py-1 text-sm border border-gray-300 rounded-lg w-64">
+                            </div>
+                            <div id="rules-list" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                        </div>
+
+                        <!-- Export/Import pravidiel -->
+                        <div class="bg-white p-4 rounded-lg">
+                            <h4 class="font-semibold mb-3 text-gray-800">💾 Export/Import</h4>
+                            <div class="flex gap-2">
+                                <button onclick="exportRules()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                    📥 Exportovať pravidlá
+                                </button>
+                                <label class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                                    📤 Importovať pravidlá
+                                    <input type="file" id="rules-import" accept=".json" class="hidden" onchange="importRules(event)">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Správa hierarchie kategórií -->
+                    <div id="hierarchy-manager" class="hidden mb-6 bg-purple-50 p-6 rounded-lg border-2 border-purple-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-purple-800">⚙️ Správa hierarchie kategórií</h3>
+                            <button onclick="hideHierarchyManager()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                                ✕ Zavrieť
+                            </button>
+                        </div>
+
+                        <!-- Pridanie novej hlavnej kategórie -->
+                        <div class="bg-white p-4 rounded-lg mb-4">
+                            <h4 class="font-semibold mb-3 text-gray-800">➕ Pridať hlavnú kategóriu</h4>
+                            <div class="flex gap-2">
+                                <input type="text" id="new-parent-category" placeholder="Názov hlavnej kategórie" 
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <button onclick="addParentCategory()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                                    Pridať
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Pridanie podkategórie -->
+                        <div class="bg-white p-4 rounded-lg mb-4">
+                            <h4 class="font-semibold mb-3 text-gray-800">➕ Pridať podkategóriu</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <select id="parent-category-select" class="px-3 py-2 border border-gray-300 rounded-lg">
+                                    <option value="">-- Vyber hlavnú kategóriu --</option>
+                                </select>
+                                <input type="text" id="new-child-category" placeholder="Názov podkategórie" 
+                                       class="px-3 py-2 border border-gray-300 rounded-lg">
+                                <button onclick="addChildCategory()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                                    Pridať
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Zoznam kategórií -->
+                        <div class="bg-white p-4 rounded-lg">
+                            <h4 class="font-semibold mb-3 text-gray-800">📋 Aktuálne kategórie</h4>
+                            <div id="hierarchy-list" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                        </div>
+
+                        <!-- Export/Import hierarchie -->
+                        <div class="bg-white p-4 rounded-lg mt-4">
+                            <h4 class="font-semibold mb-3 text-gray-800">💾 Export/Import</h4>
+                            <div class="flex gap-2">
+                                <button onclick="exportHierarchy()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                    📥 Exportovať hierarchiu
+                                </button>
+                                <label class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                                    📤 Importovať hierarchiu
+                                    <input type="file" id="hierarchy-import" accept=".json" class="hidden" onchange="importHierarchy(event)">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Periodické štatistiky -->
+                    <div id="period-stats" class="hidden mb-6"></div>
+
+                    <!-- Filtre -->
+                    <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold mb-3">🔍 Filtre</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Dátum od:</label>
+                                <input type="date" id="date-from" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Dátum do:</label>
+                                <input type="date" id="date-to" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <select id="account-filter" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                                <option value="all">Všetky účty</option>
+                            </select>
+                            <select id="category-filter" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                                <option value="all">Všetky kategórie</option>
+                                <option value="categorized">✓ Len kategorizované</option>
+                                <option value="uncategorized">❓ Len nekategorizované</option>
+                            </select>
+                            <select id="type-filter" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                                <option value="all">Všetky typy</option>
+                                <option value="debit">Výdavky</option>
+                                <option value="credit">Príjmy</option>
+                            </select>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="group-toggle" class="sr-only peer" onchange="toggleGroupedView()" checked>
+                                <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span class="ms-3 text-sm font-medium text-gray-700">Zobrazovať zoskupené kategórie</span>
+                            </label>
+                        </div>
+
+                        <div class="flex gap-2 mt-4">
+                            <button onclick="applyFilters()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Použiť filtre
+                            </button>
+                            <button onclick="clearFilters()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+                                Zrušiť filtre
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Export -->
+                    <div class="flex gap-4 mb-6">
+                        <button onclick="exportToExcel()" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            Export Excel
+                        </button>
+                        <button onclick="exportRules()" class="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                            </svg>
+                            Export pravidiel
+                        </button>
+                    </div>
+
+                    <!-- Kredity vs Debety -->
+                    <div class="mb-6">
+                        <h2 class="text-xl font-semibold mb-4">💳 Kredity vs Debety podľa kategórií</h2>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <!-- Kredity (príjmy) -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-green-700 mb-3">💰 KREDITY (Príjmy)</h3>
+                                <div id="credits-overview" class="space-y-3"></div>
+                            </div>
+                            
+                            <!-- Debety (výdavky) -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-red-700 mb-3">💸 DEBETY (Výdavky)</h3>
+                                <div id="debits-overview" class="space-y-3"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grafy -->
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold">📈 Grafické prehľady</h2>
+                            <button onclick="toggleCharts()" id="charts-toggle" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                                <span id="charts-toggle-text">Zobraziť grafy</span>
+                            </button>
+                        </div>
+                        <div id="charts-section" class="hidden">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                <!-- Koláčový graf kategórií -->
+                                <div class="bg-white p-4 rounded-lg border border-gray-200">
+                                    <h3 class="text-lg font-semibold mb-3 text-gray-800">Výdavky podľa kategórií</h3>
+                                    <canvas id="categoryPieChart"></canvas>
+                                </div>
+                                
+                                <!-- Stĺpcový graf príjmy vs výdavky -->
+                                <div class="bg-white p-4 rounded-lg border border-gray-200">
+                                    <h3 class="text-lg font-semibold mb-3 text-gray-800">Príjmy vs Výdavky</h3>
+                                    <canvas id="incomeExpenseChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- Časový vývoj -->
+                            <div class="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+                                <h3 class="text-lg font-semibold mb-3 text-gray-800">Časový vývoj bilancie</h3>
+                                <canvas id="timelineChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prehľad účtov -->
+                    <div class="mb-6" id="accounts-overview">
+                        <h2 class="text-xl font-semibold mb-4">💳 Prehľad účtov</h2>
+                        <div id="accounts-balance" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+                    </div>
+
+                    <!-- Prepínač medzi prehľadom a distribúciou -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex gap-2">
+                                <button id="btn-show-categories" onclick="showCategoriesView()" class="px-4 py-2 rounded-lg font-semibold transition-all bg-blue-600 text-white">
+                                    📊 Prehľad kategórií
+                                </button>
+                                <button id="btn-show-distribution" onclick="showDistributionView()" class="px-4 py-2 rounded-lg font-semibold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
+                                    💰 Distribúcia účtov
+                                </button>
+                            </div>
+                            <div id="active-account-filter" class="hidden">
+                                <span class="text-sm text-gray-600">Filtrované:</span>
+                                <span id="active-account-name" class="ml-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-semibold"></span>
+                                <button onclick="clearAccountFilter()" class="ml-2 px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm">
+                                    ✕ Zrušiť
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Prehľad kategórií -->
+                        <div id="category-stats-section">
+                            <div id="category-stats" class="grid grid-cols-1 gap-3"></div>
+                        </div>
+
+                        <!-- Distribúcia podľa účtov -->
+                        <div id="account-distribution-section" class="hidden">
+                            <div id="account-distribution" class="grid grid-cols-1 gap-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Distribúcia podľa účtov -->
+                    <div class="mb-6">
+                        <h2 class="text-xl font-semibold mb-4">💰 Distribúcia kategórií medzi účty</h2>
+                        <div id="account-distribution" class="grid grid-cols-1 gap-3"></div>
+                    </div>
+
+                    <!-- Tabuľka transakcií -->
+                    <div class="mb-4 flex justify-between items-center">
+                        <div id="bulk-actions" class="hidden flex gap-2 items-center">
+                            <span class="text-sm text-gray-600">Vybrané: <span id="selected-count">0</span></span>
+                            <select id="bulk-category" class="px-3 py-1 text-sm border border-gray-300 rounded-lg">
+                                <option value="">-- Zmeniť kategóriu --</option>
+                            </select>
+                            <button onclick="applyBulkCategory()" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Použiť
+                            </button>
+                            <button onclick="clearSelection()" class="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+                                Zrušiť výber
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-fixed">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-2 py-3 text-center" style="width: 40px;">
+                                        <input type="checkbox" id="select-all" onchange="toggleSelectAll()" class="cursor-pointer w-4 h-4">
+                                    </th>
+                                    <th onclick="sortBy('date')" class="px-2 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200" style="width: 100px;">
+                                        Dátum <span id="sort-date">↕</span>
+                                    </th>
+                                    <th onclick="sortBy('account')" class="px-2 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200" style="width: 110px;">
+                                        💳 Účet <span id="sort-account">↕</span>
+                                    </th>
+                                    <th onclick="sortBy('description')" class="px-2 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200" style="width: auto;">
+                                        Popis <span id="sort-description">↕</span>
+                                    </th>
+                                    <th onclick="sortBy('type')" class="px-2 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200" style="width: 80px;">
+                                        Typ <span id="sort-type">↕</span>
+                                    </th>
+                                    <th onclick="sortBy('category')" class="px-2 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200" style="width: 180px;">
+                                        Kategória <span id="sort-category">↕</span>
+                                    </th>
+                                    <th onclick="sortBy('amount')" class="px-2 py-3 text-right text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200" style="width: 110px;">
+                                        Suma <span id="sort-amount">↕</span>
+                                    </th>
+                                    <th class="px-2 py-3 text-center text-sm font-semibold text-gray-700" style="width: 90px;">
+                                        Status
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="payments-table"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="no-results" class="hidden text-center py-12 text-gray-500">
+                        Žiadne transakcie nenájdené
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let categoryRules = {};
+        let allTransactions = [];
+        let filteredTransactions = [];
+        let sortField = 'date';
+        let sortDirection = 'desc';
+        let viewMode = 'all';
+        let selectedPeriod = null;
+        let showGroupedCategories = true; // Defaultne zoskupené
+        let selectedTransactions = new Set();
+        let excludedCategories = new Set();
+        let activeAccountFilter = null; // Filter pre konkrétny účet
+        
+        // Účty
+        let accounts = ["mBank_bu", "mBank_su", "vub_bu", "vub_su", "primabanka_bu"];
+        let selectedAccount = null;
+        
+        // Grafy
+        let categoryPieChart = null;
+        let incomeExpenseChart = null;
+        let timelineChart = null;
+        let chartsVisible = false;
+
+        // Hierarchia kategórií - rodič → deti
+        const categoryHierarchy = {
+            'Auto a doprava': ['Kupa', 'Parkovanie a poplatky', 'Pohonné hmoty', 'Poistenie auta', 'Servis a náhradné diely', 'Verejná doprava a taxi', 'Auto a doprava - iné'],
+            'Deti': ['Detský tovar a hračky', 'Krúžky a aktivity', 'Materská škola a opatrovateľka', 'Škola a Školské potreby', 'Deti - iné'],
+            'Domácnosť': ['Chod domácnosti', 'Dom a záhrada', 'Doplnky a vybavenie', 'Hypotéka', 'Kupa bytu', 'Poistenie domácnosti', 'Rekonstrukcia', 'Domácnosť - iné'],
+            'Firemné': ['Prevod na firemný účet', 'Výdavky na podnikanie', 'Firemné - iné'],
+            'Každodenné výdavky': ['Alkohol', 'Cigarety', 'Domáce Nieratá', 'Potraviny a drogéria', 'Reštaurácie', 'Vyber hotovosti', 'Výber hotovosti', 'Každodenné výdavky - iné'],
+            'Osobné': ['Svadba', 'Darčeky a dobročinnosť', 'Elektronika', 'Hudba, filmy, knihy a časopisy', 'Kava', 'Kzj', 'Niekto za mna zaplatil', 'Oblečenie a obuv', 'Online služby', 'Vraciam peniaze', 'Vzdelávanie', 'Zdravie a krása', 'Osobné - iné'],
+            'Platby': ['Dane', 'Elektrina', 'Kú renie', 'Nájomné a prenájom', 'Plyn', 'Poistenie', 'Poplatky a úroky', 'Preposielanie', 'Splátky', 'Televízia, internet, telefón', 'Vodné a stočné', 'Platby - iné'],
+            'Zábava': ['Akcie a udalosti', 'Cestovanie', 'Šport a hobby', 'Zábava - iné'],
+            'Úspory a investície': ['Akcie', 'Fondy', 'Pozicka', 'Pravidelné sporenie', 'prejt', 'Vklady a sporenie', 'Úspory a investície - iné'],
+            'Nepodstatné': ['Platba bude vratena', 'Prevod medzi vlastnými účtami', 'Splátka kreditnej karty', 'Nepodstatné - iné'],
+            'Príjmy': ['Bonusy a prémie', 'Bývanie', 'Dar', 'Fakturácia', 'Investície', 'Mzda', 'Poistné plnenie', 'Predaj', 'Pripísanie úveru', 'Rodinne pridavky', 'Úroky', 'Vratene prachy', 'Príjmy - iné', 'Botox']
+        };
+
+        // Vytvor mapu: podkategória → rodičovská kategória
+        const childToParent = {};
+        Object.entries(categoryHierarchy).forEach(([parent, children]) => {
+            children.forEach(child => {
+                childToParent[child] = parent;
+            });
+        });
+
+        // Získaj rodičovskú kategóriu
+        function getParentCategory(category) {
+            return childToParent[category] || category;
+        }
+
+        // Načítanie pravidiel
+        document.getElementById('rules-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const json = JSON.parse(e.target.result);
+                        if (json.categoryRules) {
+                            categoryRules = json.categoryRules;
+                            document.getElementById('rules-status').innerHTML = 
+                                `<span class="text-green-600 font-semibold">✓ Načítaných ${Object.keys(categoryRules).length} kategórií (lokálny súbor)</span>`;
+                        }
+                    } catch (error) {
+                        document.getElementById('rules-status').innerHTML = 
+                            `<span class="text-red-600">✗ Chyba: ${error.message}</span>`;
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        const ONEDRIVE_RULES_URL = 'https://tomtor55.github.io/json-data/rules_20260421.json';
+
+        async function loadRulesFromOneDrive() {
+            const statusEl = document.getElementById('rules-status');
+            statusEl.innerHTML = '<span class="text-blue-600">⏳ Načítavam z GitHubu...</span>';
+            try {
+                const response = await fetch(ONEDRIVE_RULES_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const json = await response.json();
+                if (json.categoryRules) {
+                    categoryRules = json.categoryRules;
+                    const now = new Date().toLocaleTimeString('sk-SK');
+                    statusEl.innerHTML = `<span class="text-green-600 font-semibold">✓ Načítaných ${Object.keys(categoryRules).length} kategórií z GitHubu (${now})</span>`;
+                } else {
+                    throw new Error('Súbor neobsahuje categoryRules');
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<span class="text-red-600">✗ GitHub chyba: ${error.message} — použi lokálny súbor</span>`;
+            }
+        }
+
+        // Automaticky načítaj pravidlá z OneDrive pri štarte
+        loadRulesFromOneDrive();
+
+        // Aliasy pre rôzne formáty baniek
+        const columnAliases = {
+            date: ['Dátum', 'Datum', 'Date', 'DATE', 'date', 'Dátum transakcie', 'Transaction Date', 
+                   '#Dátum operácie', 'Dátum operácie'],
+            description: ['Popis', 'Description', 'DESCRIPTION', 'Opis', 'Popis transakcie', 'Transaction Description', 'Detail', 
+                          '#Opis operácie', 'Opis operácie'],
+            amount: ['Suma', 'Amount', 'AMOUNT', 'Čiastka', 'Hodnota', 'Value', 'Suma transakcie', '#Suma'],
+            type: ['Typ', 'Type', 'TYPE', 'Typ transakcie', 'Transaction Type', 'Flow'],
+            category: ['Kategória', 'Kategoria', 'Category', 'CATEGORY', 'Kategórie', '#Kategória', 'Kategoria']
+        };
+
+        // Načítanie transakcií
+        document.getElementById('file-input').addEventListener('change', handleFileUpload);
+        document.getElementById('file-input-2').addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // Zisti z ktorého inputu to je a použi správny account select
+                const isSecondInput = e.target.id === 'file-input-2';
+                const accountSelectId = isSecondInput ? 'account-select-2' : 'account-select';
+                
+                // Skontroluj či je vybraný účet
+                selectedAccount = document.getElementById(accountSelectId).value;
+                if (!selectedAccount) {
+                    alert('Najprv vyber účet, ku ktorému chceš priradiť transakcie');
+                    e.target.value = '';
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    // Normalizuj názvy stĺpcov - odstráň whitespace a # prefix
+                    const normalizedData = jsonData.map(row => {
+                        const normalizedRow = {};
+                        Object.keys(row).forEach(key => {
+                            // Odstráň whitespace na začiatku/konci a # prefix
+                            let normalizedKey = key.trim();
+                            if (normalizedKey.startsWith('#')) {
+                                normalizedKey = normalizedKey.substring(1).trim();
+                            }
+                            normalizedRow[normalizedKey] = row[key];
+                            
+                            // Zachovaj aj originálny kľúč pre spätnu kompatibilitu
+                            if (normalizedKey !== key) {
+                                normalizedRow[key] = row[key];
+                            }
+                        });
+                        return normalizedRow;
+                    });
+                    
+                    processTransactions(normalizedData, file.name);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        // Normalizácia textu
+        function normalizeText(text) {
+            if (!text) return '';
+            return text.toString().toUpperCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^A-Z0-9\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // Kontrola či normalized text obsahuje keyword ako celé slovo (nie substring)
+        function containsKeyword(text, keyword) {
+            if (!keyword) return false;
+            const normText = normalizeText(text);
+            const normKeyword = normalizeText(keyword);
+            if (!normKeyword) return false;
+            // Ak keyword obsahuje medzeru (viacslovný), stačí includes
+            // Ak je jednoslovný, vyžadujeme word boundary
+            if (normKeyword.includes(' ')) {
+                return normText.includes(normKeyword);
+            }
+            const regex = new RegExp('(?<![A-Z0-9])' + normKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Z0-9])');
+            return regex.test(normText);
+        }
+
+        // Aplikovanie pravidiel
+        function applyRules(description, transactionType) {
+            const normalizedDesc = normalizeText(description);
+            const normalizedType = normalizeText(transactionType);
+            const originalDesc = description; // pre containsKeyword
+            
+            for (const [category, rules] of Object.entries(categoryRules)) {
+                // Kontrola AND pravidiel (najprv - špecifickejšie)
+                if (rules.andRules && rules.andRules.length > 0) {
+                    for (const andRule of rules.andRules) {
+                        let allMatch = true;
+                        
+                        // Kontrola kľúčového slova
+                        if (andRule.keyword) {
+                            if (andRule.isRegex) {
+                                try {
+                                    const regex = new RegExp(andRule.keyword, 'i');
+                                    if (!regex.test(description)) {
+                                        allMatch = false;
+                                    }
+                                } catch (e) {
+                                    allMatch = false;
+                                }
+                            } else {
+                                if (!containsKeyword(description, andRule.keyword)) {
+                                    allMatch = false;
+                                }
+                            }
+                        }
+                        
+                        // Kontrola typu transakcie
+                        if (andRule.transactionType && allMatch) {
+                            if (andRule.isRegexType) {
+                                try {
+                                    const regex = new RegExp(andRule.transactionType, 'i');
+                                    if (!regex.test(transactionType)) {
+                                        allMatch = false;
+                                    }
+                                } catch (e) {
+                                    allMatch = false;
+                                }
+                            } else {
+                                const normalizedRuleType = normalizeText(andRule.transactionType);
+                                if (!normalizedType.includes(normalizedRuleType)) {
+                                    allMatch = false;
+                                }
+                            }
+                        }
+                        
+                        if (allMatch && (andRule.keyword || andRule.transactionType)) {
+                            return category;
+                        }
+                    }
+                }
+                
+                if (rules.transactionTypes && rules.transactionTypes.length > 0) {
+                    for (const type of rules.transactionTypes) {
+                        if (normalizedType.includes(normalizeText(type))) {
+                            return category;
+                        }
+                    }
+                }
+                
+                if (rules.keywords && rules.keywords.length > 0) {
+                    for (const keyword of rules.keywords) {
+                        if (containsKeyword(originalDesc, keyword)) {
+                            return category;
+                        }
+                    }
+                }
+            }
+            
+            return 'Nekategorizované';
+        }
+
+        // Flexibilné mapovanie stĺpcov
+        function findColumn(row, possibleNames) {
+            for (const name of possibleNames) {
+                if (row.hasOwnProperty(name)) {
+                    return row[name];
+                }
+            }
+            return '';
+        }
+
+        // Získaj názov nájdeného stĺpca
+        function findColumnName(row, possibleNames) {
+            for (const name of possibleNames) {
+                if (row.hasOwnProperty(name)) {
+                    return name;
+                }
+            }
+            return null;
+        }
+        function excelDateToISO(excelDate) {
+            // Ak je prázdne
+            if (!excelDate && excelDate !== 0) return '';
+            
+            // Ak je už string vo formáte YYYY-MM-DD, vráť ho
+            if (typeof excelDate === 'string') {
+                if (excelDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    return excelDate.substring(0, 10);
+                }
+                
+                // Formát DD.MM.YYYY (napr. 26.07.2024)
+                const ddmmyyyyMatch = excelDate.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+                if (ddmmyyyyMatch) {
+                    const day = ddmmyyyyMatch[1].padStart(2, '0');
+                    const month = ddmmyyyyMatch[2].padStart(2, '0');
+                    const year = ddmmyyyyMatch[3];
+                    return `${year}-${month}-${day}`;
+                }
+                
+                // Formát DD/MM/YYYY (napr. 26/07/2024)
+                const ddmmyyyySlashMatch = excelDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (ddmmyyyySlashMatch) {
+                    const day = ddmmyyyySlashMatch[1].padStart(2, '0');
+                    const month = ddmmyyyySlashMatch[2].padStart(2, '0');
+                    const year = ddmmyyyySlashMatch[3];
+                    return `${year}-${month}-${day}`;
+                }
+                
+                // Pokus sa parsovať ako dátum (pre iné formáty)
+                const parsed = new Date(excelDate);
+                if (!isNaN(parsed.getTime())) {
+                    const year = parsed.getFullYear();
+                    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                    const day = String(parsed.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+            }
+            
+            // Ak je Excel serial number (napr. 45362)
+            if (typeof excelDate === 'number') {
+                const excelEpoch = new Date(1899, 11, 30);
+                const jsDate = new Date(excelEpoch.getTime() + excelDate * 86400000);
+                const year = jsDate.getFullYear();
+                const month = String(jsDate.getMonth() + 1).padStart(2, '0');
+                const day = String(jsDate.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            
+            console.warn('Nepodarilo sa konvertovať dátum:', excelDate, typeof excelDate);
+            return '';
+        }
+
+        // Spracovanie transakcií
+        function processTransactions(data, fileName) {
+            // VARIANT A: Vymaž staré transakcie z tohto účtu pred pridaním nových
+            const oldCount = allTransactions.length;
+            const oldAccountTransactions = allTransactions.filter(t => t.ucet === selectedAccount).length;
+            allTransactions = allTransactions.filter(t => t.ucet !== selectedAccount);
+            
+            let preserved = 0;
+            let categorized = 0;
+            let newTransactions = [];
+            
+            data.forEach(row => {
+                const datumRaw = findColumn(row, columnAliases.date);
+                const datum = excelDateToISO(datumRaw);
+                let popis = findColumn(row, columnAliases.description);
+                const sumaRaw = findColumn(row, columnAliases.amount);
+                const suma = parseFloat(sumaRaw || 0);
+                let typ = findColumn(row, columnAliases.type);
+                let originalPopis = popis; // zachovaj pre keyword matching
+                
+                // Primabanka: extrahuj obchodné meno z dlhého Popis reťazca
+                // Formát: "Platba kartou - mobilom, Nákup,MERCHANT NAME,Mesto DD.MM. ..."
+                if (popis && /^Platba kartou/i.test(popis)) {
+                    const cardMatch = popis.match(/^Platba kartou[^,]*,\s*[^,]*,\s*([^,]+)/i);
+                    if (cardMatch) {
+                        // Použij celý popis ako typ (pre keyword matching) a vyčistené meno ako popis
+                        if (!typ || typ.trim() === '') typ = popis;
+                        popis = cardMatch[1].replace(/\s+\d{2}\.\d{2}\.\s*$/, '').trim();
+                    }
+                } else if (popis && /^SK\w{20,}/.test(popis)) {
+                    // Prevod: "SK7083605207... MENO  TRANSFER" → vytiahni meno pre zobrazenie
+                    // ale zachovaj originál pre keyword matching
+                    if (!typ || typ.trim() === '') typ = popis;
+                    const skratenePopis = popis.replace(/^SK\w+\s+/, '').replace(/\s{2,}.*/, '').trim();
+                    popis = skratenePopis || popis;
+                }
+                
+                // Ak chýba typ, dopočítaj ho podľa sumy
+                if (!typ || typ.trim() === '') {
+                    if (suma > 0) {
+                        typ = 'CREDIT'; // Príjem
+                    } else if (suma < 0) {
+                        typ = 'DEBIT'; // Výdavok
+                    } else {
+                        typ = 'NEUTRAL'; // Nulová suma
+                    }
+                }
+                
+                let kategoria = findColumn(row, columnAliases.category);
+                
+                let isPreserved = false;
+                
+                if (kategoria && kategoria.trim() !== '' && kategoria !== 'Nekategorizované') {
+                    preserved++;
+                    isPreserved = true;
+                } else {
+                    kategoria = applyRules(originalPopis, typ);
+                    if (kategoria !== 'Nekategorizované') {
+                        categorized++;
+                    }
+                }
+                
+                newTransactions.push({
+                    datum: datum,
+                    popis: popis,
+                    suma: suma,
+                    typ: typ,
+                    kategoria: kategoria,
+                    ucet: selectedAccount,
+                    preserved: isPreserved,
+                    isDebit: suma < 0
+                });
+            });
+
+            // Pridaj nové transakcie k existujúcim (bez starých transakcií z tohto účtu)
+            allTransactions = allTransactions.concat(newTransactions);
+
+            // Diagnostika - zobraz prvý riadok pre kontrolu
+            if (data.length > 0) {
+                const firstRow = data[0];
+                const detectedColumns = {
+                    datum: findColumnName(firstRow, columnAliases.date),
+                    popis: findColumnName(firstRow, columnAliases.description),
+                    suma: findColumnName(firstRow, columnAliases.amount),
+                    typ: findColumnName(firstRow, columnAliases.type),
+                    kategoria: findColumnName(firstRow, columnAliases.category)
+                };
+                
+                // Spočítaj riadky bez dátumu v NOVÝCH transakciách
+                const missingDates = newTransactions.filter(t => !t.datum || t.datum === '').length;
+                
+                console.log('=== DIAGNOSTIKA NAČÍTANIA ===');
+                console.log('Súbor:', fileName);
+                console.log('Účet:', selectedAccount);
+                if (oldAccountTransactions > 0) {
+                    console.log(`⚠️ Odstránených ${oldAccountTransactions} starých transakcií z účtu "${selectedAccount}"`);
+                }
+                console.log('Všetky stĺpce v súbore:', Object.keys(firstRow));
+                console.log('Detekované mapovanie:', detectedColumns);
+                console.log('Prvá transakcia (surové dáta):', firstRow);
+                console.log('Prvá transakcia (spracované):', newTransactions[0]);
+                console.log('Nových transakcií:', newTransactions.length);
+                console.log('Celkovo transakcií:', allTransactions.length);
+                console.log('⚠️ Transakcií bez dátumu:', missingDates);
+                
+                if (missingDates > 0) {
+                    console.warn('Ukážka transakcií bez dátumu:', 
+                        newTransactions.filter(t => !t.datum || t.datum === '').slice(0, 3));
+                }
+                
+                // Zobraz info o mapovaní v UI
+                const isPrimabankaFile = newTransactions.length > 0 && 
+                    Object.keys(firstRow).includes('Zostatok po transakcii');
+                let mappingInfo = `
+                    <div class="mt-2 p-3 bg-blue-50 rounded text-sm">
+                        <strong>Detekované stĺpce:</strong><br>
+                        Dátum: <code class="bg-white px-1">${detectedColumns.datum || '❌ nenájdené'}</code> | 
+                        Popis: <code class="bg-white px-1">${detectedColumns.popis || '❌ nenájdené'}</code> | 
+                        Suma: <code class="bg-white px-1">${detectedColumns.suma || '❌ nenájdené'}</code> | 
+                        Typ: <code class="bg-white px-1">${detectedColumns.typ || '❌ nenájdené'}</code> | 
+                        Kategória: <code class="bg-white px-1">${detectedColumns.kategoria || '⚠️ voliteľné'}</code>
+                        ${isPrimabankaFile ? '<br><span class="text-purple-700 font-medium">🏦 Detekovaný formát Primabanka — obchodné mená sú automaticky extrahované z popisu</span>' : ''}
+                `;
+                
+                if (missingDates > 0) {
+                    mappingInfo += `
+                        <div class="mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-400 text-sm">
+                            <strong>⚠️ Upozornenie:</strong> ${missingDates} transakcií nemá dátum. Otvor konzolu (F12) pre viac info.
+                        </div>
+                    `;
+                }
+                
+                if (oldAccountTransactions > 0) {
+                    mappingInfo += `
+                        <div class="mt-2 p-2 bg-orange-50 border-l-4 border-orange-400 text-sm">
+                            <strong>🔄 Nahradené:</strong> Odstránených ${oldAccountTransactions} starých transakcií z účtu "${selectedAccount}"
+                        </div>
+                    `;
+                }
+                
+                mappingInfo += '</div>';
+                
+                const countElem = document.getElementById('payment-count');
+                countElem.innerHTML = `<strong>Celkom:</strong> ${allTransactions.length} transakcií | <strong>Účet "${selectedAccount}":</strong> ${newTransactions.length} transakcií (${preserved} zachovaných, ${categorized} novo kategorizovaných)${mappingInfo}`;
+            }
+
+            document.getElementById('file-name').textContent = `Posledný import: ${fileName} → ${selectedAccount}`;
+            
+            document.getElementById('upload-section').classList.add('hidden');
+            document.getElementById('data-section').classList.remove('hidden');
+            
+            populateCategoryFilter();
+            populateAccountFilter();
+            applyFilters();
+        }
+
+        // Naplnenie filtra kategórií
+        function populateCategoryFilter() {
+            const select = document.getElementById('category-filter');
+            const currentValue = select.value;
+            
+            select.innerHTML = `
+                <option value="all">Všetky kategórie</option>
+                <option value="categorized">✓ Len kategorizované</option>
+                <option value="uncategorized">❓ Len nekategorizované</option>
+            `;
+            
+            // Zobraz hierarchickú štruktúru
+            const sortedParents = Object.keys(categoryHierarchy).sort();
+            
+            sortedParents.forEach(parent => {
+                const headerOption = document.createElement('option');
+                headerOption.value = '';
+                headerOption.disabled = true;
+                headerOption.textContent = '📁 ' + parent;
+                headerOption.style.fontWeight = 'bold';
+                headerOption.style.backgroundColor = '#f3f4f6';
+                select.appendChild(headerOption);
+                
+                const children = categoryHierarchy[parent].sort();
+                children.forEach(child => {
+                    const option = document.createElement('option');
+                    option.value = child;
+                    option.textContent = '├─ ' + child;
+                    option.style.paddingLeft = '20px';
+                    select.appendChild(option);
+                });
+            });
+            
+            const nekategorOption = document.createElement('option');
+            nekategorOption.value = 'Nekategorizované';
+            nekategorOption.textContent = '❓ Nekategorizované';
+            nekategorOption.style.fontWeight = 'bold';
+            nekategorOption.style.color = '#9ca3af';
+            select.appendChild(nekategorOption);
+            
+            // Obnov predchádzajúcu hodnotu
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+        }
+
+        // Naplnenie filtra účtov
+        function populateAccountFilter() {
+            const select = document.getElementById('account-filter');
+            const currentValue = select.value;
+            
+            select.innerHTML = '<option value="all">Všetky účty</option>';
+            
+            // Získaj unikátne účty z transakcií
+            const uniqueAccounts = [...new Set(allTransactions.map(t => t.ucet).filter(Boolean))].sort();
+            
+            uniqueAccounts.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account;
+                option.textContent = account;
+                select.appendChild(option);
+            });
+            
+            // Obnov predchádzajúcu hodnotu ak existuje
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+        }
+
+        // Prepínanie zoskupeného zobrazenia
+        function toggleGroupedView() {
+            showGroupedCategories = document.getElementById('group-toggle').checked;
+            populateCategoryFilter(); // Obnov dropdown so správnymi kategóriami
+            applyFilters(); // Aplikuj filtre znova
+        }
+
+        // Aplikovanie filtrov
+        function applyFilters() {
+            const dateFrom = document.getElementById('date-from').value;
+            const dateTo = document.getElementById('date-to').value;
+            const account = document.getElementById('account-filter').value;
+            const category = document.getElementById('category-filter').value;
+            const type = document.getElementById('type-filter').value;
+
+            filteredTransactions = allTransactions.filter(t => {
+                if (dateFrom && t.datum < dateFrom) return false;
+                if (dateTo && t.datum > dateTo) return false;
+                
+                if (account !== 'all' && t.ucet !== account) return false;
+                
+                if (category === 'categorized') {
+                    if (t.kategoria === 'Nekategorizované') return false;
+                } else if (category === 'uncategorized') {
+                    if (t.kategoria !== 'Nekategorizované') return false;
+                } else if (category !== 'all') {
+                    if (showGroupedCategories) {
+                        if (getParentCategory(t.kategoria) !== category) return false;
+                    } else {
+                        if (t.kategoria !== category) return false;
+                    }
+                }
+                
+                if (type === 'debit' && !t.isDebit) return false;
+                if (type === 'credit' && t.isDebit) return false;
+                return true;
+            });
+
+            updateDisplay();
+        }
+
+        function clearFilters() {
+            document.getElementById('date-from').value = '';
+            document.getElementById('date-to').value = '';
+            document.getElementById('account-filter').value = 'all';
+            document.getElementById('category-filter').value = 'all';
+            document.getElementById('type-filter').value = 'all';
+            applyFilters();
+        }
+
+        // Aktualizácia zobrazenia
+        function updateDisplay() {
+            updateStats();
+            updateAccountsBalance();
+            updateCategoryStats();
+            updateAccountDistribution();
+            updateIncomeExpenseOverview();
+            updateTable();
+            updateCharts();
+        }
+
+        // Aktualizácia štatistík
+        
+        function isTransactionExcluded(transaction) {
+            if (!excludedCategories || excludedCategories.size === 0) {
+                return false;
+            }
+            const parentCategory = getParentCategory(transaction.kategoria);
+            return excludedCategories.has(parentCategory);
+        }
+
+        
+        // ===== VYLÚČENIE KATEGÓRIÍ =====
+        
+        function showExcludeCategoriesPanel() {
+            document.getElementById('exclude-categories-panel').classList.remove('hidden');
+            document.getElementById('rules-manager').classList.add('hidden');
+            document.getElementById('hierarchy-manager').classList.add('hidden');
+            document.getElementById('accounts-manager').classList.add('hidden');
+            displayExcludeCategories();
+        }
+
+        function hideExcludeCategoriesPanel() {
+            document.getElementById('exclude-categories-panel').classList.add('hidden');
+        }
+
+        function displayExcludeCategories() {
+            const list = document.getElementById('exclude-categories-list');
+            if (!list) return;
+            
+            list.innerHTML = '';
+            const sortedParents = Object.keys(categoryHierarchy).sort();
+            
+            sortedParents.forEach(parent => {
+                const isExcluded = excludedCategories.has(parent);
+                
+                const div = document.createElement('div');
+                div.className = 'category-checkbox p-3 border rounded-lg flex items-center gap-2 transition-all ' + 
+                               (isExcluded ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200');
+                div.onclick = () => toggleExcludeCategory(parent);
+                
+                div.innerHTML = `
+                    <input type="checkbox" 
+                           ${isExcluded ? 'checked' : ''} 
+                           class="w-4 h-4 cursor-pointer"
+                           onclick="event.stopPropagation(); toggleExcludeCategory('${parent.replace(/'/g, "\'")}');">
+                    <span class="${isExcluded ? 'excluded-category' : ''}">
+                        📁 ${parent}
+                    </span>
+                `;
+                
+                list.appendChild(div);
+            });
+        }
+
+        function toggleExcludeCategory(category) {
+            if (excludedCategories.has(category)) {
+                excludedCategories.delete(category);
+            } else {
+                excludedCategories.add(category);
+            }
+            displayExcludeCategories();
+            applyFilters();
+        }
+
+        function excludeAll() {
+            excludedCategories = new Set(Object.keys(categoryHierarchy));
+            displayExcludeCategories();
+            applyFilters();
+        }
+
+        function includeAll() {
+            excludedCategories.clear();
+            displayExcludeCategories();
+            applyFilters();
+        }
+
+        // ===== DISTRIBÚCIA ÚČTOV =====
+        
+        function updateAccountDistribution() {
+            const distributionDiv = document.getElementById('account-distribution');
+            if (!distributionDiv) return;
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            // Zoskup podľa hlavnej kategórie a detailnej kategórie
+            const categoryMap = {};
+            
+            includedTransactions.forEach(t => {
+                const parentCat = getParentCategory(t.kategoria);
+                const detailCat = t.kategoria;
+                
+                if (!categoryMap[parentCat]) {
+                    categoryMap[parentCat] = {
+                        total: 0,
+                        count: 0,
+                        accounts: {},
+                        subcategories: {}
+                    };
+                }
+                
+                categoryMap[parentCat].total += Math.abs(t.suma);
+                categoryMap[parentCat].count += 1;
+                
+                // Účty na úrovni hlavnej kategórie
+                const account = t.ucet || 'Nepridelené';
+                if (!categoryMap[parentCat].accounts[account]) {
+                    categoryMap[parentCat].accounts[account] = {
+                        total: 0,
+                        count: 0
+                    };
+                }
+                categoryMap[parentCat].accounts[account].total += Math.abs(t.suma);
+                categoryMap[parentCat].accounts[account].count += 1;
+                
+                // Podkategórie
+                if (!categoryMap[parentCat].subcategories[detailCat]) {
+                    categoryMap[parentCat].subcategories[detailCat] = {
+                        total: 0,
+                        count: 0,
+                        accounts: {}
+                    };
+                }
+                
+                categoryMap[parentCat].subcategories[detailCat].total += Math.abs(t.suma);
+                categoryMap[parentCat].subcategories[detailCat].count += 1;
+                
+                // Účty na úrovni podkategórie
+                if (!categoryMap[parentCat].subcategories[detailCat].accounts[account]) {
+                    categoryMap[parentCat].subcategories[detailCat].accounts[account] = {
+                        total: 0,
+                        count: 0
+                    };
+                }
+                categoryMap[parentCat].subcategories[detailCat].accounts[account].total += Math.abs(t.suma);
+                categoryMap[parentCat].subcategories[detailCat].accounts[account].count += 1;
+            });
+            
+            const sortedCategories = Object.entries(categoryMap)
+                .sort((a, b) => b[1].total - a[1].total);
+            
+            if (sortedCategories.length === 0) {
+                distributionDiv.innerHTML = '<p class="text-gray-500 text-center py-4">Žiadne transakcie</p>';
+                return;
+            }
+            
+            const colors = {
+                'mBank_bu': 'bg-blue-600',
+                'mBank_su': 'bg-blue-400',
+                'vub_bu': 'bg-green-600',
+                'vub_su': 'bg-green-400',
+                'primabanka_bu': 'bg-purple-600'
+            };
+            
+            const html = sortedCategories.map(([parentCategory, parentData]) => {
+                // Progress bary pre hlavnú kategóriu
+                const sortedParentAccounts = Object.entries(parentData.accounts)
+                    .sort((a, b) => b[1].total - a[1].total);
+                
+                const parentAccountBars = sortedParentAccounts.map(([account, accData]) => {
+                    const percent = (accData.total / parentData.total * 100).toFixed(1);
+                    const amount = accData.total.toFixed(2);
+                    const color = colors[account] || 'bg-gray-500';
+                    const isActive = activeAccountFilter === account;
+                    
+                    return `
+                        <div class="flex items-center gap-2 mb-2 cursor-pointer hover:bg-gray-50 p-1 rounded transition-all ${isActive ? 'bg-blue-50 ring-2 ring-blue-400' : ''}"
+                             onclick="filterByAccount('${account.replace(/'/g, "\'")}')">
+                            <div class="w-32 text-sm font-medium text-gray-700">${account}</div>
+                            <div class="flex-1 bg-gray-200 rounded-full h-6 overflow-hidden">
+                                <div class="${color} h-full flex items-center justify-end px-2 text-white text-xs font-semibold transition-all"
+                                     style="width: ${percent}%">
+                                    ${parseFloat(percent) > 10 ? percent + '%' : ''}
+                                </div>
+                            </div>
+                            <div class="w-32 text-right">
+                                <div class="text-sm font-semibold text-gray-800">${amount} €</div>
+                                <div class="text-xs text-gray-500">${percent}%</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Podkategórie
+                const sortedSubcategories = Object.entries(parentData.subcategories)
+                    .sort((a, b) => b[1].total - a[1].total);
+                
+                const subcategoriesHtml = sortedSubcategories.map(([subcat, subcatData]) => {
+                    const sortedSubAccounts = Object.entries(subcatData.accounts)
+                        .sort((a, b) => b[1].total - a[1].total);
+                    
+                    const subAccountBars = sortedSubAccounts.map(([account, accData]) => {
+                        const percent = (accData.total / subcatData.total * 100).toFixed(1);
+                        const amount = accData.total.toFixed(2);
+                        const color = colors[account] || 'bg-gray-500';
+                        const isActive = activeAccountFilter === account;
+                        
+                        return `
+                            <div class="flex items-center gap-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded transition-all ${isActive ? 'bg-blue-50 ring-1 ring-blue-300' : ''}"
+                                 onclick="filterByAccount('${account.replace(/'/g, "\'")}')">
+                                <div class="w-28 text-xs font-medium text-gray-600">${account}</div>
+                                <div class="flex-1 bg-gray-200 rounded-full h-5 overflow-hidden">
+                                    <div class="${color} h-full flex items-center justify-end px-2 text-white text-xs font-semibold transition-all"
+                                         style="width: ${percent}%">
+                                        ${parseFloat(percent) > 15 ? percent + '%' : ''}
+                                    </div>
+                                </div>
+                                <div class="w-28 text-right">
+                                    <div class="text-xs font-semibold text-gray-700">${amount} €</div>
+                                    <div class="text-xs text-gray-400">${percent}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    return `
+                        <div class="ml-6 mt-2 mb-3 bg-gray-50 p-3 rounded-lg border-l-4 border-blue-300">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="text-sm font-semibold text-gray-700">├─ ${subcat}</h4>
+                                <div class="text-right">
+                                    <div class="text-sm font-bold text-gray-700">${subcatData.total.toFixed(2)} €</div>
+                                    <div class="text-xs text-gray-500">${subcatData.count}×</div>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                ${subAccountBars}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                return `
+                    <div class="bg-white p-4 rounded-lg border-2 border-blue-200 hover:shadow-lg transition-shadow mb-4">
+                        <div class="flex justify-between items-center mb-4 pb-3 border-b-2 border-gray-100">
+                            <h3 class="font-bold text-gray-800 text-xl">📁 ${parentCategory}</h3>
+                            <div class="text-right">
+                                <div class="text-xl font-bold text-blue-600">${parentData.total.toFixed(2)} €</div>
+                                <div class="text-xs text-gray-500">${parentData.count} transakcií</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="text-xs font-semibold text-gray-600 mb-2">CELKOVO (všetky podkategórie):</div>
+                            <div class="space-y-1">
+                                ${parentAccountBars}
+                            </div>
+                        </div>
+                        
+                        ${subcategoriesHtml}
+                    </div>
+                `;
+            }).join('');
+            
+            distributionDiv.innerHTML = html;
+        }
+
+        
+        // ===== PREPÍNANIE MEDZI PREHĽADOM A DISTRIBÚCIOU =====
+        
+        let currentView = 'categories'; // 'categories' alebo 'distribution'
+        
+        function showCategoriesView() {
+            currentView = 'categories';
+            document.getElementById('category-stats-section').classList.remove('hidden');
+            document.getElementById('account-distribution-section').classList.add('hidden');
+            
+            document.getElementById('btn-show-categories').className = 'px-4 py-2 rounded-lg font-semibold transition-all bg-blue-600 text-white';
+            document.getElementById('btn-show-distribution').className = 'px-4 py-2 rounded-lg font-semibold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300';
+        }
+        
+        function showDistributionView() {
+            currentView = 'distribution';
+            document.getElementById('category-stats-section').classList.add('hidden');
+            document.getElementById('account-distribution-section').classList.remove('hidden');
+            
+            document.getElementById('btn-show-categories').className = 'px-4 py-2 rounded-lg font-semibold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300';
+            document.getElementById('btn-show-distribution').className = 'px-4 py-2 rounded-lg font-semibold transition-all bg-blue-600 text-white';
+        }
+        
+        // ===== FILTROVANIE PODĽA ÚČTU =====
+        
+        function filterByAccount(account) {
+            if (activeAccountFilter === account) {
+                // Ak klikneš na už aktívny filter, zruš ho
+                clearAccountFilter();
+            } else {
+                activeAccountFilter = account;
+                document.getElementById('active-account-filter').classList.remove('hidden');
+                document.getElementById('active-account-name').textContent = account;
+                applyFilters();
+            }
+        }
+        
+        function clearAccountFilter() {
+            activeAccountFilter = null;
+            document.getElementById('active-account-filter').classList.add('hidden');
+            applyFilters();
+        }
+
+        function updateStats() {
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            const total = includedTransactions.length;
+            const expenses = includedTransactions.filter(t => t.isDebit).reduce((sum, t) => sum + Math.abs(t.suma), 0);
+            const income = includedTransactions.filter(t => !t.isDebit).reduce((sum, t) => sum + t.suma, 0);
+            const categorizedCount = includedTransactions.filter(t => t.kategoria !== 'Nekategorizované').length;
+
+            document.getElementById('total-count').textContent = total;
+            document.getElementById('total-expenses').textContent = expenses.toFixed(2) + ' €';
+            document.getElementById('total-income').textContent = income.toFixed(2) + ' €';
+            document.getElementById('categorized-count').textContent = categorizedCount;
+        }
+
+        // Aktualizácia prehľadu účtov
+        
+        // Distribúcia kategórií medzi účty
+        
+        // ===== PRÍJMY VS VÝDAVKY PODĽA KATEGÓRIÍ =====
+        
+        function updateIncomeExpenseOverview() {
+            const creditsDiv = document.getElementById('credits-overview');
+            const debitsDiv = document.getElementById('debits-overview');
+            if (!creditsDiv || !debitsDiv) return;
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            // Rozdeľ na kredity a debety
+            const credits = includedTransactions.filter(t => !t.isDebit);
+            const debits = includedTransactions.filter(t => t.isDebit);
+            
+            // Funkcia na zoskupenie podľa kategórií
+            function groupByCategory(transactions) {
+                const categoryMap = {};
+                
+                transactions.forEach(t => {
+                    const parentCat = getParentCategory(t.kategoria);
+                    
+                    if (!categoryMap[parentCat]) {
+                        categoryMap[parentCat] = {
+                            total: 0,
+                            count: 0,
+                            subcategories: {}
+                        };
+                    }
+                    
+                    categoryMap[parentCat].total += Math.abs(t.suma);
+                    categoryMap[parentCat].count += 1;
+                    
+                    // Podkategórie
+                    const detailCat = t.kategoria;
+                    if (!categoryMap[parentCat].subcategories[detailCat]) {
+                        categoryMap[parentCat].subcategories[detailCat] = {
+                            total: 0,
+                            count: 0
+                        };
+                    }
+                    categoryMap[parentCat].subcategories[detailCat].total += Math.abs(t.suma);
+                    categoryMap[parentCat].subcategories[detailCat].count += 1;
+                });
+                
+                return categoryMap;
+            }
+            
+            // Funkcia na vytvorenie HTML
+            function createCategoryHTML(categoryMap, color) {
+                const sortedCategories = Object.entries(categoryMap)
+                    .sort((a, b) => b[1].total - a[1].total);
+                
+                if (sortedCategories.length === 0) {
+                    return '<p class="text-gray-400 text-center py-8 italic">Žiadne transakcie</p>';
+                }
+                
+                // Vypočítaj celkovú sumu pre percentá
+                const grandTotal = sortedCategories.reduce((sum, [, data]) => sum + data.total, 0);
+                
+                return sortedCategories.map(([category, data]) => {
+                    const percent = grandTotal > 0 ? (data.total / grandTotal * 100).toFixed(1) : 0;
+                    
+                    // Podkategórie
+                    const sortedSubs = Object.entries(data.subcategories)
+                        .sort((a, b) => b[1].total - a[1].total);
+                    
+                    const subsHTML = sortedSubs.map(([subcat, subdata]) => {
+                        const subPercent = data.total > 0 ? (subdata.total / data.total * 100).toFixed(1) : 0;
+                        return `
+                            <div class="flex items-center justify-between text-xs py-1 px-2 hover:bg-gray-50 rounded">
+                                <span class="text-gray-600">├─ ${subcat}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-500">${subdata.count}×</span>
+                                    <span class="font-semibold text-gray-700">${subdata.total.toFixed(2)} €</span>
+                                    <span class="text-gray-400 text-xs">${subPercent}%</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    return `
+                        <div class="bg-white border-2 ${color === 'green' ? 'border-green-200' : 'border-red-200'} rounded-lg p-3 hover:shadow-md transition-shadow">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-bold text-gray-800">📁 ${category}</h4>
+                                <div class="text-right">
+                                    <div class="text-lg font-bold ${color === 'green' ? 'text-green-600' : 'text-red-600'}">
+                                        ${data.total.toFixed(2)} €
+                                    </div>
+                                    <div class="text-xs text-gray-500">${data.count}× • ${percent}%</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <div class="bg-gray-200 rounded-full h-6 overflow-hidden">
+                                    <div class="${color === 'green' ? 'bg-green-500' : 'bg-red-500'} h-full flex items-center justify-center text-white text-xs font-bold transition-all"
+                                         style="width: ${percent}%">
+                                        ${parseFloat(percent) > 10 ? percent + '%' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${sortedSubs.length > 1 ? `
+                                <div class="mt-2 pt-2 border-t border-gray-200">
+                                    ${subsHTML}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            // Zoskup a zobraz
+            const creditsMap = groupByCategory(credits);
+            const debitsMap = groupByCategory(debits);
+            
+            creditsDiv.innerHTML = createCategoryHTML(creditsMap, 'green');
+            debitsDiv.innerHTML = createCategoryHTML(debitsMap, 'red');
+            
+            // Pridaj celkové súčty hore
+            const totalCredits = credits.reduce((sum, t) => sum + Math.abs(t.suma), 0);
+            const totalDebits = debits.reduce((sum, t) => sum + Math.abs(t.suma), 0);
+            
+            const creditsSummary = `
+                <div class="bg-green-50 border-2 border-green-300 rounded-lg p-3 mb-3 sticky top-0">
+                    <div class="flex justify-between items-center">
+                        <span class="font-semibold text-green-800">CELKOM KREDITY:</span>
+                        <span class="text-xl font-bold text-green-600">${totalCredits.toFixed(2)} €</span>
+                    </div>
+                    <div class="text-xs text-green-700 mt-1">${credits.length} transakcií</div>
+                </div>
+            `;
+            
+            const debitsSummary = `
+                <div class="bg-red-50 border-2 border-red-300 rounded-lg p-3 mb-3 sticky top-0">
+                    <div class="flex justify-between items-center">
+                        <span class="font-semibold text-red-800">CELKOM DEBETY:</span>
+                        <span class="text-xl font-bold text-red-600">${totalDebits.toFixed(2)} €</span>
+                    </div>
+                    <div class="text-xs text-red-700 mt-1">${debits.length} transakcií</div>
+                </div>
+            `;
+            
+            creditsDiv.innerHTML = creditsSummary + creditsDiv.innerHTML;
+            debitsDiv.innerHTML = debitsSummary + debitsDiv.innerHTML;
+        }
+
+        function updateAccountsBalance() {
+            const accountsBalance = {};
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            includedTransactions.forEach(t => {
+                const account = t.ucet || 'Nepridelené';
+                if (!accountsBalance[account]) {
+                    accountsBalance[account] = { count: 0, balance: 0, income: 0, expenses: 0 };
+                }
+                accountsBalance[account].count++;
+                accountsBalance[account].balance += t.suma;
+                if (t.isDebit) {
+                    accountsBalance[account].expenses += Math.abs(t.suma);
+                } else {
+                    accountsBalance[account].income += t.suma;
+                }
+            });
+
+            const balanceHtml = Object.entries(accountsBalance)
+                .sort((a, b) => b[1].balance - a[1].balance)
+                .map(([account, data]) => `
+                    <div class="bg-white p-4 rounded-lg border-2 border-orange-200 hover:shadow-md transition-shadow cursor-pointer"
+                         onclick="filterByAccount('${account.replace(/'/g, "\\'")}')">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-semibold text-gray-800">💳 ${account}</span>
+                            <span class="text-sm text-gray-500">${data.count}×</span>
+                        </div>
+                        <div class="text-2xl font-bold ${data.balance >= 0 ? 'text-green-600' : 'text-red-600'} mb-1">
+                            ${data.balance.toFixed(2)} €
+                        </div>
+                        <div class="text-xs text-gray-500 flex justify-between">
+                            <span>↑ ${data.income.toFixed(2)} €</span>
+                            <span>↓ ${data.expenses.toFixed(2)} €</span>
+                        </div>
+                    </div>
+                `).join('');
+
+            document.getElementById('accounts-balance').innerHTML = balanceHtml;
+            
+            // Skry sekciu ak nie sú účty
+            document.getElementById('accounts-overview').style.display = 
+                Object.keys(accountsBalance).length > 0 ? 'block' : 'none';
+        }
+
+        // Aktualizácia štatistík kategórií
+        function updateCategoryStats() {
+            const categoryMap = {};
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            includedTransactions.forEach(t => {
+                const displayCategory = showGroupedCategories ? getParentCategory(t.kategoria) : t.kategoria;
+                
+                if (!categoryMap[displayCategory]) {
+                    categoryMap[displayCategory] = { count: 0, total: 0 };
+                }
+                categoryMap[displayCategory].count++;
+                categoryMap[displayCategory].total += Math.abs(t.suma);
+            });
+
+            const currentFilter = document.getElementById('category-filter').value;
+
+            let statsHtml = '';
+
+            if (showGroupedCategories) {
+                // Zoskupený pohľad - jednoduché karty
+                statsHtml = Object.entries(categoryMap)
+                    .sort((a, b) => b[1].total - a[1].total)
+                    .map(([cat, data]) => {
+                        const isActive = currentFilter === cat;
+                        
+                        return `
+                        <div onclick="filterByCategory('${cat.replace(/'/g, "\\'")}', ${showGroupedCategories})" 
+                             class="bg-white p-3 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md
+                                    ${isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}"
+                             title="Klikni pre filtrovanie">
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium text-gray-800">${cat}</span>
+                                <span class="text-sm text-gray-500">${data.count}×</span>
+                            </div>
+                            <div class="text-lg font-bold text-blue-600">${data.total.toFixed(2)} €</div>
+                        </div>
+                    `}).join('');
+            } else {
+                // Detailný pohľad - zoskupené podľa nadradených kategórií
+                const groupedByParent = {};
+                
+                Object.entries(categoryMap).forEach(([cat, data]) => {
+                    const parent = getParentCategory(cat);
+                    if (!groupedByParent[parent]) {
+                        groupedByParent[parent] = {
+                            total: 0,
+                            count: 0,
+                            children: []
+                        };
+                    }
+                    groupedByParent[parent].total += data.total;
+                    groupedByParent[parent].count += data.count;
+                    groupedByParent[parent].children.push({ name: cat, ...data });
+                });
+
+                // Zoraď hlavné kategórie podľa sumy
+                const sortedParents = Object.entries(groupedByParent)
+                    .sort((a, b) => b[1].total - a[1].total);
+
+                statsHtml = sortedParents.map(([parent, parentData]) => {
+                    // Zoraď podkategórie podľa sumy
+                    const sortedChildren = parentData.children.sort((a, b) => b.total - a.total);
+                    
+                    const childrenHtml = sortedChildren.map(child => {
+                        const isActive = currentFilter === child.name;
+                        
+                        return `
+                        <div onclick="filterByCategory('${child.name.replace(/'/g, "\\'")}', false)" 
+                             class="bg-white p-2 rounded border-l-4 cursor-pointer transition-all hover:shadow-sm
+                                    ${isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}"
+                             title="Klikni pre filtrovanie">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-gray-700">${child.name}</span>
+                                <span class="text-xs text-gray-500">${child.count}×</span>
+                            </div>
+                            <div class="text-base font-semibold text-blue-600">${child.total.toFixed(2)} €</div>
+                        </div>
+                    `}).join('');
+
+                    return `
+                    <div class="col-span-full">
+                        <div onclick="filterByParentCategory('${parent.replace(/'/g, "\\'")}')" 
+                             class="bg-gradient-to-r from-gray-100 to-gray-50 p-3 rounded-lg mb-2 cursor-pointer hover:from-gray-200 hover:to-gray-100 transition-all"
+                             title="Klikni pre zobrazenie všetkých transakcií v tejto kategórii">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-gray-800 text-lg">📁 ${parent}</h3>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-600">${parentData.count} transakcií</div>
+                                    <div class="text-lg font-bold text-gray-800">${parentData.total.toFixed(2)} €</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-4 ml-4">
+                            ${childrenHtml}
+                        </div>
+                    </div>
+                `}).join('');
+            }
+
+            document.getElementById('category-stats').innerHTML = statsHtml;
+        }
+
+        // Filtrovanie podľa rodičovskej kategórie
+        function filterByParentCategory(parentCategory) {
+            const select = document.getElementById('category-filter');
+            
+            // Prepni do zoskupeného módu
+            if (!showGroupedCategories) {
+                document.getElementById('group-toggle').checked = true;
+                showGroupedCategories = true;
+                populateCategoryFilter();
+            }
+            
+            select.value = parentCategory;
+            applyFilters();
+        }
+
+        // Filtrovanie podľa kategórie
+        function filterByCategory(category, isGrouped) {
+            const select = document.getElementById('category-filter');
+            
+            if (isGrouped) {
+                // Ak je zoskupené, vyber všetky podkategórie danej hlavnej kategórie
+                select.value = 'all'; // Reset dropdown
+                
+                // Filtruj transakcie podľa hlavnej kategórie
+                filteredTransactions = allTransactions.filter(t => {
+                    const dateFrom = document.getElementById('date-from').value;
+                    const dateTo = document.getElementById('date-to').value;
+                    const type = document.getElementById('type-filter').value;
+                    
+                    if (dateFrom && t.datum < dateFrom) return false;
+                    if (dateTo && t.datum > dateTo) return false;
+                    if (type === 'debit' && !t.isDebit) return false;
+                    if (type === 'credit' && t.isDebit) return false;
+                    
+                    return getParentCategory(t.kategoria) === category;
+                });
+            } else {
+                // Detailné zobrazenie - nastav hodnotu v selecte
+                select.value = category;
+                applyFilters();
+                return;
+            }
+            
+            updateDisplay();
+        }
+
+        // Aktualizácia tabuľky
+        
+        // Funkcia na vytvorenie tooltipu pre dlhý text
+        function createTooltipText(text) {
+            if (!text || text.length < 50) return text;
+            return `
+                <div class="tooltip-container">
+                    <span class="wrap-text">${text}</span>
+                    <span class="tooltip-text">${text}</span>
+                </div>
+            `;
+        }
+
+        function updateTable() {
+            const sorted = [...filteredTransactions].sort((a, b) => {
+                let aVal = a[sortField];
+                let bVal = b[sortField];
+                
+                if (sortField === 'amount') {
+                    aVal = Math.abs(a.suma);
+                    bVal = Math.abs(b.suma);
+                } else if (sortField === 'date') {
+                    aVal = a.datum || '';
+                    bVal = b.datum || '';
+                } else if (sortField === 'description') {
+                    aVal = a.popis || '';
+                    bVal = b.popis || '';
+                } else if (sortField === 'type') {
+                    aVal = a.typ || '';
+                    bVal = b.typ || '';
+                } else if (sortField === 'category') {
+                    aVal = a.kategoria || '';
+                    bVal = b.kategoria || '';
+                } else if (sortField === 'account') {
+                    aVal = a.ucet || '';
+                    bVal = b.ucet || '';
+                }
+                
+                if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+                if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+                
+                if (sortDirection === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+
+            // Získaj všetky detailné kategórie pre dropdown - hierarchicky
+            const getCategoryDropdownOptions = (selectedCategory) => {
+                let options = '';
+                
+                // Zoraď rodičovské kategórie
+                const sortedParents = Object.keys(categoryHierarchy).sort();
+                
+                sortedParents.forEach(parent => {
+                    // Hlavička rodičovskej kategórie (disabled, len na zobrazenie)
+                    options += `<option value="" disabled style="font-weight: bold; background-color: #f3f4f6;">📁 ${parent}</option>`;
+                    
+                    // Podkategórie (odsadené)
+                    const children = categoryHierarchy[parent].sort();
+                    children.forEach(child => {
+                        const isSelected = child === selectedCategory ? 'selected' : '';
+                        options += `<option value="${child}" ${isSelected} style="padding-left: 20px;">├─ ${child}</option>`;
+                    });
+                });
+                
+                // Nekategorizované na konci
+                const isNekategorSelected = selectedCategory === 'Nekategorizované' ? 'selected' : '';
+                options += `<option value="Nekategorizované" ${isNekategorSelected} style="font-weight: bold; color: #9ca3af;">❓ Nekategorizované</option>`;
+                
+                return options;
+            };
+
+            const tableHtml = sorted.map((t, index) => {
+                const displayCategory = showGroupedCategories ? getParentCategory(t.kategoria) : t.kategoria;
+                const categoryLabel = showGroupedCategories && displayCategory !== t.kategoria 
+                    ? `${displayCategory} <span class="text-xs text-gray-500">(${t.kategoria})</span>`
+                    : displayCategory;
+                
+                // Nájdi originálny index v allTransactions
+                const originalIndex = allTransactions.findIndex(orig => 
+                    orig.datum === t.datum && 
+                    orig.popis === t.popis && 
+                    orig.suma === t.suma
+                );
+                
+                return `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="px-2 py-3 text-center">
+                        <input type="checkbox" 
+                               onchange="toggleTransactionSelection(${originalIndex})" 
+                               ${selectedTransactions.has(originalIndex) ? 'checked' : ''}
+                               class="cursor-pointer w-4 h-4">
+                    </td>
+                    <td class="px-2 py-3 text-sm">${t.datum || '-'}</td>
+                    <td class="px-2 py-3">
+                        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded font-medium">${t.ucet || '-'}</span>
+                    </td>
+                    <td class="px-2 py-3">${createTooltipText(t.popis || '-')}</td>
+                    <td class="px-2 py-3 text-sm">${t.typ || '-'}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <select onchange="changeCategory(${originalIndex}, this.value)" 
+                                    class="text-sm px-2 py-1 border border-gray-300 rounded bg-white hover:border-blue-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer w-full max-w-xs">
+                                ${getCategoryDropdownOptions(t.kategoria)}
+                            </select>
+                        </div>
+                    </td>
+                    <td class="px-2 py-3 text-right font-medium ${t.isDebit ? 'text-red-600' : 'text-green-600'}">
+                        ${t.suma.toFixed(2)} €
+                    </td>
+                    <td class="px-2 py-3 text-center">
+                        ${t.preserved ? 
+                            '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">Zachované</span>' : 
+                            '<span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">Nové</span>'}
+                    </td>
+                </tr>
+            `}).join('');
+
+            document.getElementById('payments-table').innerHTML = tableHtml;
+            document.getElementById('no-results').classList.toggle('hidden', sorted.length > 0);
+            
+            // Aktualizuj indikátory zoradenia
+            ['date', 'account', 'description', 'type', 'category', 'amount'].forEach(field => {
+                const indicator = document.getElementById('sort-' + field);
+                if (indicator) {
+                    if (sortField === field) {
+                        indicator.textContent = sortDirection === 'asc' ? '↑' : '↓';
+                    } else {
+                        indicator.textContent = '↕';
+                    }
+                }
+            });
+        }
+
+        // Zmena kategórie
+        function changeCategory(transactionIndex, newCategory) {
+            if (transactionIndex >= 0 && transactionIndex < allTransactions.length) {
+                allTransactions[transactionIndex].kategoria = newCategory;
+                allTransactions[transactionIndex].preserved = false; // Označiť ako manuálne zmenené
+                
+                // Aplikuj filtre znova (aktualizuje filteredTransactions)
+                applyFilters();
+                
+                // Zobraz notifikáciu
+                showNotification('Kategória bola zmenená');
+            }
+        }
+
+        // Výber transakcie
+        function toggleTransactionSelection(index) {
+            if (selectedTransactions.has(index)) {
+                selectedTransactions.delete(index);
+            } else {
+                selectedTransactions.add(index);
+            }
+            updateBulkActions();
+        }
+
+        // Výber všetkých
+        function toggleSelectAll() {
+            const checkbox = document.getElementById('select-all');
+            
+            if (checkbox.checked) {
+                // Vyber všetky filtrované transakcie
+                filteredTransactions.forEach(t => {
+                    const originalIndex = allTransactions.findIndex(orig => 
+                        orig.datum === t.datum && 
+                        orig.popis === t.popis && 
+                        orig.suma === t.suma
+                    );
+                    if (originalIndex >= 0) {
+                        selectedTransactions.add(originalIndex);
+                    }
+                });
+            } else {
+                selectedTransactions.clear();
+            }
+            
+            updateTable();
+            updateBulkActions();
+        }
+
+        // Aktualizuj zobrazenie hromadných akcií
+        function updateBulkActions() {
+            const count = selectedTransactions.size;
+            const bulkActions = document.getElementById('bulk-actions');
+            
+            if (count > 0) {
+                bulkActions.classList.remove('hidden');
+                bulkActions.classList.add('flex');
+                document.getElementById('selected-count').textContent = count;
+                
+                // Naplň dropdown kategóriami hierarchicky
+                const bulkSelect = document.getElementById('bulk-category');
+                if (bulkSelect.options.length <= 1) {
+                    const sortedParents = Object.keys(categoryHierarchy).sort();
+                    
+                    sortedParents.forEach(parent => {
+                        // Hlavička rodičovskej kategórie
+                        const headerOption = document.createElement('option');
+                        headerOption.value = '';
+                        headerOption.disabled = true;
+                        headerOption.textContent = `📁 ${parent}`;
+                        headerOption.style.fontWeight = 'bold';
+                        headerOption.style.backgroundColor = '#f3f4f6';
+                        bulkSelect.appendChild(headerOption);
+                        
+                        // Podkategórie
+                        const children = categoryHierarchy[parent].sort();
+                        children.forEach(child => {
+                            const option = document.createElement('option');
+                            option.value = child;
+                            option.textContent = `├─ ${child}`;
+                            option.style.paddingLeft = '20px';
+                            bulkSelect.appendChild(option);
+                        });
+                    });
+                    
+                    // Nekategorizované
+                    const nekategorOption = document.createElement('option');
+                    nekategorOption.value = 'Nekategorizované';
+                    nekategorOption.textContent = '❓ Nekategorizované';
+                    nekategorOption.style.fontWeight = 'bold';
+                    nekategorOption.style.color = '#9ca3af';
+                    bulkSelect.appendChild(nekategorOption);
+                }
+            } else {
+                bulkActions.classList.add('hidden');
+                bulkActions.classList.remove('flex');
+            }
+        }
+
+        // Aplikuj hromadnú zmenu kategórie
+        function applyBulkCategory() {
+            const newCategory = document.getElementById('bulk-category').value;
+            
+            if (!newCategory) {
+                alert('Vyberte prosím kategóriu');
+                return;
+            }
+            
+            let changed = 0;
+            selectedTransactions.forEach(index => {
+                if (index >= 0 && index < allTransactions.length) {
+                    allTransactions[index].kategoria = newCategory;
+                    allTransactions[index].preserved = false;
+                    changed++;
+                }
+            });
+            
+            clearSelection();
+            applyFilters();
+            showNotification(`Kategória bola zmenená pre ${changed} transakcií`);
+        }
+
+        // Zruš výber
+        function clearSelection() {
+            selectedTransactions.clear();
+            document.getElementById('select-all').checked = false;
+            updateTable();
+            updateBulkActions();
+        }
+
+        // Jednoduchá notifikácia
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 2000);
+        }
+
+        // Zoradenie
+        function sortBy(field) {
+            if (sortField === field) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortField = field;
+                sortDirection = 'desc';
+            }
+            updateTable();
+        }
+
+        // Režimy zobrazenia
+        function setViewMode(mode) {
+            viewMode = mode;
+            
+            document.getElementById('btn-view-all').className = 'px-4 py-2 rounded-lg transition-colors ' + 
+                (mode === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200');
+            document.getElementById('btn-view-monthly').className = 'px-4 py-2 rounded-lg transition-colors ' + 
+                (mode === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200');
+            document.getElementById('btn-view-yearly').className = 'px-4 py-2 rounded-lg transition-colors ' + 
+                (mode === 'yearly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200');
+
+            if (mode === 'monthly') {
+                showMonthlyStats();
+            } else if (mode === 'yearly') {
+                showYearlyStats();
+            } else {
+                document.getElementById('period-stats').classList.add('hidden');
+                applyFilters();
+            }
+        }
+
+        // Mesačné štatistiky
+        function showMonthlyStats() {
+            const monthlyData = {};
+            
+            allTransactions.forEach(t => {
+                if (!t.datum) return;
+                const month = t.datum.substring(0, 7);
+                if (!monthlyData[month]) {
+                    monthlyData[month] = { expenses: 0, income: 0, count: 0 };
+                }
+                if (t.isDebit) {
+                    monthlyData[month].expenses += Math.abs(t.suma);
+                } else {
+                    monthlyData[month].income += t.suma;
+                }
+                monthlyData[month].count++;
+            });
+
+            const statsHtml = Object.entries(monthlyData)
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .map(([month, data]) => `
+                    <div class="bg-white p-4 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-all" onclick="selectPeriod('${month}', 'month')">
+                        <div class="text-lg font-bold text-gray-800 mb-2">📅 ${month}</div>
+                        <div class="grid grid-cols-3 gap-2 text-sm">
+                            <div>
+                                <div class="text-gray-600">Transakcie</div>
+                                <div class="font-semibold">${data.count}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-600">Výdavky</div>
+                                <div class="font-semibold text-red-600">${data.expenses.toFixed(2)} €</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-600">Príjmy</div>
+                                <div class="font-semibold text-green-600">${data.income.toFixed(2)} €</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+            document.getElementById('period-stats').innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">' + statsHtml + '</div>';
+            document.getElementById('period-stats').classList.remove('hidden');
+        }
+
+        // Ročné štatistiky
+        function showYearlyStats() {
+            const yearlyData = {};
+            
+            allTransactions.forEach(t => {
+                if (!t.datum) return;
+                const year = t.datum.substring(0, 4);
+                if (!yearlyData[year]) {
+                    yearlyData[year] = { expenses: 0, income: 0, count: 0 };
+                }
+                if (t.isDebit) {
+                    yearlyData[year].expenses += Math.abs(t.suma);
+                } else {
+                    yearlyData[year].income += t.suma;
+                }
+                yearlyData[year].count++;
+            });
+
+            const statsHtml = Object.entries(yearlyData)
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .map(([year, data]) => {
+                    const balance = data.income - data.expenses;
+                    return `
+                    <div class="bg-white p-6 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-all" onclick="selectPeriod('${year}', 'year')">
+                        <div class="text-2xl font-bold text-gray-800 mb-3">📊 ${year}</div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Transakcie:</span>
+                                <span class="font-semibold">${data.count}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Výdavky:</span>
+                                <span class="font-semibold text-red-600">${data.expenses.toFixed(2)} €</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Príjmy:</span>
+                                <span class="font-semibold text-green-600">${data.income.toFixed(2)} €</span>
+                            </div>
+                            <div class="flex justify-between pt-2 border-t">
+                                <span class="text-gray-600">Bilancia:</span>
+                                <span class="font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                    ${balance.toFixed(2)} €
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `}).join('');
+
+            document.getElementById('period-stats').innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">' + statsHtml + '</div>';
+            document.getElementById('period-stats').classList.remove('hidden');
+        }
+
+        // Výber obdobia
+        function selectPeriod(period, type) {
+            selectedPeriod = { period, type };
+            
+            // Prepni späť na "Všetky transakcie"
+            setViewMode('all');
+            
+            if (type === 'month') {
+                document.getElementById('date-from').value = period + '-01';
+                const lastDay = new Date(period + '-01');
+                lastDay.setMonth(lastDay.getMonth() + 1);
+                lastDay.setDate(0);
+                const lastDayStr = String(lastDay.getDate()).padStart(2, '0');
+                document.getElementById('date-to').value = period + '-' + lastDayStr;
+            } else if (type === 'year') {
+                document.getElementById('date-from').value = period + '-01-01';
+                document.getElementById('date-to').value = period + '-12-31';
+            }
+            
+            applyFilters();
+        }
+
+        // Export Excel
+        function exportToExcel() {
+            const exportData = filteredTransactions.map(t => ({
+                'Dátum': t.datum,
+                'Popis': t.popis,
+                'Suma': t.suma,
+                'Typ': t.typ,
+                'Kategória': t.kategoria
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Transakcie');
+            
+            const date = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `transakcie_kategorizovane_${date}.xlsx`);
+        }
+
+        // Export pravidiel
+        function exportRules() {
+            const rulesExport = {
+                categoryRules: categoryRules,
+                exportDate: new Date().toISOString()
+            };
+            
+            const json = JSON.stringify(rulesExport, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `pravidla_${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ===== SPRÁVA HIERARCHIE KATEGÓRIÍ =====
+        
+        function showHierarchyManager() {
+            document.getElementById('hierarchy-manager').classList.remove('hidden');
+            document.getElementById('rules-manager').classList.add('hidden');
+            updateParentCategorySelect();
+            displayHierarchyList();
+        }
+
+        function hideHierarchyManager() {
+            document.getElementById('hierarchy-manager').classList.add('hidden');
+        }
+
+        // ===== SPRÁVA PRAVIDIEL =====
+        
+        function showRulesManager() {
+            document.getElementById('rules-manager').classList.remove('hidden');
+            document.getElementById('hierarchy-manager').classList.add('hidden');
+            updateRuleCategorySelect();
+            updateAndRuleCategorySelect();
+            displayRulesList();
+        }
+
+        function hideRulesManager() {
+            document.getElementById('rules-manager').classList.add('hidden');
+        }
+
+        function toggleRuleMode() {
+            const mode = document.querySelector('input[name="rule-mode"]:checked').value;
+            if (mode === 'simple') {
+                document.getElementById('simple-rule').classList.remove('hidden');
+                document.getElementById('and-rule').classList.add('hidden');
+            } else {
+                document.getElementById('simple-rule').classList.add('hidden');
+                document.getElementById('and-rule').classList.remove('hidden');
+            }
+        }
+
+        function updateRuleCategorySelect() {
+            const select = document.getElementById('rule-category');
+            select.innerHTML = '<option value="">-- Vyber kategóriu --</option>';
+            
+            const sortedParents = Object.keys(categoryHierarchy).sort();
+            
+            sortedParents.forEach(parent => {
+                const headerOption = document.createElement('option');
+                headerOption.value = '';
+                headerOption.disabled = true;
+                headerOption.textContent = `📁 ${parent}`;
+                headerOption.style.fontWeight = 'bold';
+                headerOption.style.backgroundColor = '#f3f4f6';
+                select.appendChild(headerOption);
+                
+                const children = categoryHierarchy[parent].sort();
+                children.forEach(child => {
+                    const option = document.createElement('option');
+                    option.value = child;
+                    option.textContent = `├─ ${child}`;
+                    option.style.paddingLeft = '20px';
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function updateAndRuleCategorySelect() {
+            const select = document.getElementById('and-rule-category');
+            select.innerHTML = '<option value="">-- Vyber kategóriu --</option>';
+            
+            const sortedParents = Object.keys(categoryHierarchy).sort();
+            
+            sortedParents.forEach(parent => {
+                const headerOption = document.createElement('option');
+                headerOption.value = '';
+                headerOption.disabled = true;
+                headerOption.textContent = `📁 ${parent}`;
+                headerOption.style.fontWeight = 'bold';
+                headerOption.style.backgroundColor = '#f3f4f6';
+                select.appendChild(headerOption);
+                
+                const children = categoryHierarchy[parent].sort();
+                children.forEach(child => {
+                    const option = document.createElement('option');
+                    option.value = child;
+                    option.textContent = `├─ ${child}`;
+                    option.style.paddingLeft = '20px';
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function addSimpleRule() {
+            const category = document.getElementById('rule-category').value;
+            const keyword = document.getElementById('rule-keyword').value.trim();
+            const type = document.getElementById('rule-type').value;
+            
+            if (!category) {
+                alert('Vyberte kategóriu');
+                return;
+            }
+            
+            if (!keyword) {
+                alert('Zadajte kľúčové slovo');
+                return;
+            }
+            
+            if (!categoryRules[category]) {
+                categoryRules[category] = {
+                    keywords: [],
+                    transactionTypes: [],
+                    andRules: []
+                };
+            }
+            
+            if (type === 'keyword') {
+                if (categoryRules[category].keywords.includes(keyword)) {
+                    alert('Toto pravidlo už existuje');
+                    return;
+                }
+                categoryRules[category].keywords.push(keyword);
+            } else {
+                if (categoryRules[category].transactionTypes.includes(keyword)) {
+                    alert('Toto pravidlo už existuje');
+                    return;
+                }
+                categoryRules[category].transactionTypes.push(keyword);
+            }
+            
+            document.getElementById('rule-keyword').value = '';
+            displayRulesList();
+            showNotification('Pravidlo pridané');
+        }
+
+        function addAndRule() {
+            const category = document.getElementById('and-rule-category').value;
+            const keyword = document.getElementById('and-keyword').value.trim();
+            const transType = document.getElementById('and-type').value.trim();
+            const keywordRegex = document.getElementById('and-keyword-regex').checked;
+            const typeRegex = document.getElementById('and-type-regex').checked;
+            
+            if (!category) {
+                alert('Vyberte kategóriu');
+                return;
+            }
+            
+            if (!keyword && !transType) {
+                alert('Zadajte aspoň jednu podmienku');
+                return;
+            }
+            
+            if (!categoryRules[category]) {
+                categoryRules[category] = {
+                    keywords: [],
+                    transactionTypes: [],
+                    andRules: []
+                };
+            }
+            
+            if (!categoryRules[category].andRules) {
+                categoryRules[category].andRules = [];
+            }
+            
+            const andRule = {};
+            if (keyword) {
+                andRule.keyword = keyword;
+                andRule.isRegex = keywordRegex;
+            }
+            if (transType) {
+                andRule.transactionType = transType;
+                andRule.isRegexType = typeRegex;
+            }
+            
+            categoryRules[category].andRules.push(andRule);
+            
+            document.getElementById('and-keyword').value = '';
+            document.getElementById('and-type').value = '';
+            document.getElementById('and-keyword-regex').checked = false;
+            document.getElementById('and-type-regex').checked = false;
+            
+            displayRulesList();
+            showNotification('AND pravidlo pridané');
+        }
+
+        function addRule() {
+            addSimpleRule();
+        }
+
+        function deleteRule(category, keyword, type) {
+            if (!confirm(`Naozaj chcete odstrániť toto pravidlo?`)) {
+                return;
+            }
+            
+            if (type === 'keyword') {
+                const index = categoryRules[category].keywords.indexOf(keyword);
+                if (index > -1) {
+                    categoryRules[category].keywords.splice(index, 1);
+                }
+            } else {
+                const index = categoryRules[category].transactionTypes.indexOf(keyword);
+                if (index > -1) {
+                    categoryRules[category].transactionTypes.splice(index, 1);
+                }
+            }
+            
+            // Ak kategória nemá žiadne pravidlá, odstráň ju
+            if (categoryRules[category].keywords.length === 0 && 
+                categoryRules[category].transactionTypes.length === 0) {
+                delete categoryRules[category];
+            }
+            
+            displayRulesList();
+            showNotification('Pravidlo odstránené');
+        }
+
+        function displayRulesList() {
+            const list = document.getElementById('rules-list');
+            const searchTerm = document.getElementById('rules-search').value.toLowerCase();
+            list.innerHTML = '';
+            
+            const sortedCategories = Object.keys(categoryRules).sort();
+            
+            sortedCategories.forEach(category => {
+                const rules = categoryRules[category];
+                const parent = getParentCategory(category);
+                
+                // Filter based on search
+                const matchesSearch = !searchTerm || 
+                    category.toLowerCase().includes(searchTerm) ||
+                    rules.keywords.some(k => k.toLowerCase().includes(searchTerm)) ||
+                    rules.transactionTypes.some(t => t.toLowerCase().includes(searchTerm));
+                
+                if (!matchesSearch) return;
+                
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'border-l-4 border-green-500 pl-3 py-2';
+                
+                const categoryHeader = document.createElement('div');
+                categoryHeader.className = 'bg-green-100 p-2 rounded mb-1';
+                categoryHeader.innerHTML = `
+                    <div class="font-semibold text-green-800">${category}</div>
+                    <div class="text-xs text-green-600">📁 ${parent}</div>
+                `;
+                categoryDiv.appendChild(categoryHeader);
+                
+                // Keywords
+                if (rules.keywords && rules.keywords.length > 0) {
+                    rules.keywords.forEach(keyword => {
+                        const ruleDiv = document.createElement('div');
+                        ruleDiv.className = 'flex justify-between items-center bg-gray-50 p-2 rounded ml-4 mb-1';
+                        ruleDiv.innerHTML = `
+                            <div>
+                                <span class="text-gray-700">${keyword}</span>
+                                <span class="text-xs text-gray-500 ml-2">[Kľúčové slovo]</span>
+                            </div>
+                            <button onclick="deleteRule('${category.replace(/'/g, "\\'")}', '${keyword.replace(/'/g, "\\'")}', 'keyword')" 
+                                    class="px-2 py-1 text-xs bg-red-400 text-white rounded hover:bg-red-500">
+                                🗑️
+                            </button>
+                        `;
+                        categoryDiv.appendChild(ruleDiv);
+                    });
+                }
+                
+                // Transaction Types
+                if (rules.transactionTypes && rules.transactionTypes.length > 0) {
+                    rules.transactionTypes.forEach(type => {
+                        const ruleDiv = document.createElement('div');
+                        ruleDiv.className = 'flex justify-between items-center bg-blue-50 p-2 rounded ml-4 mb-1';
+                        ruleDiv.innerHTML = `
+                            <div>
+                                <span class="text-gray-700">${type}</span>
+                                <span class="text-xs text-blue-600 ml-2">[Typ transakcie]</span>
+                            </div>
+                            <button onclick="deleteRule('${category.replace(/'/g, "\\'")}', '${type.replace(/'/g, "\\'")}', 'transactionType')" 
+                                    class="px-2 py-1 text-xs bg-red-400 text-white rounded hover:bg-red-500">
+                                🗑️
+                            </button>
+                        `;
+                        categoryDiv.appendChild(ruleDiv);
+                    });
+                }
+                
+                // AND Rules
+                if (rules.andRules && rules.andRules.length > 0) {
+                    rules.andRules.forEach((andRule, index) => {
+                        const ruleDiv = document.createElement('div');
+                        ruleDiv.className = 'flex justify-between items-center bg-purple-50 p-2 rounded ml-4 mb-1 border-l-2 border-purple-400';
+                        
+                        let ruleText = [];
+                        if (andRule.keyword) {
+                            ruleText.push(andRule.keyword + (andRule.isRegex ? ' (regex)' : ''));
+                        }
+                        if (andRule.transactionType) {
+                            ruleText.push('Typ: ' + andRule.transactionType + (andRule.isRegexType ? ' (regex)' : ''));
+                        }
+                        
+                        ruleDiv.innerHTML = `
+                            <div>
+                                <span class="text-gray-700">${ruleText.join(' <strong class="text-purple-600">AND</strong> ')}</span>
+                                <span class="text-xs text-purple-600 ml-2 font-semibold">[AND pravidlo]</span>
+                            </div>
+                            <button onclick="deleteAndRule('${category.replace(/'/g, "\\'")}', ${index})" 
+                                    class="px-2 py-1 text-xs bg-red-400 text-white rounded hover:bg-red-500">
+                                🗑️
+                            </button>
+                        `;
+                        categoryDiv.appendChild(ruleDiv);
+                    });
+                }
+                
+                list.appendChild(categoryDiv);
+            });
+            
+            if (list.children.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-center py-4">Žiadne pravidlá nenájdené</p>';
+            }
+        }
+
+        function deleteAndRule(category, index) {
+            if (!confirm(`Naozaj chcete odstrániť toto AND pravidlo?`)) {
+                return;
+            }
+            
+            if (categoryRules[category].andRules && categoryRules[category].andRules[index]) {
+                categoryRules[category].andRules.splice(index, 1);
+            }
+            
+            displayRulesList();
+            showNotification('AND pravidlo odstránené');
+        }
+
+        function filterRulesList() {
+            displayRulesList();
+        }
+
+        function importRules(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    
+                    if (json.categoryRules) {
+                        if (confirm('Naozaj chcete nahradiť aktuálne pravidlá?')) {
+                            categoryRules = json.categoryRules;
+                            displayRulesList();
+                            showNotification('Pravidlá importované');
+                        }
+                    } else {
+                        alert('Neplatný formát súboru');
+                    }
+                } catch (error) {
+                    alert('Chyba pri načítaní súboru: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            event.target.value = '';
+        }
+
+        // ===== HIERARCHIA KATEGÓRIÍ =====
+
+        function updateParentCategorySelect() {
+            const select = document.getElementById('parent-category-select');
+            select.innerHTML = '<option value="">-- Vyber hlavnú kategóriu --</option>';
+            
+            Object.keys(categoryHierarchy).sort().forEach(parent => {
+                const option = document.createElement('option');
+                option.value = parent;
+                option.textContent = parent;
+                select.appendChild(option);
+            });
+        }
+
+        function addParentCategory() {
+            const name = document.getElementById('new-parent-category').value.trim();
+            
+            if (!name) {
+                alert('Zadajte názov hlavnej kategórie');
+                return;
+            }
+            
+            if (categoryHierarchy[name]) {
+                alert('Táto hlavná kategória už existuje');
+                return;
+            }
+            
+            categoryHierarchy[name] = [];
+            document.getElementById('new-parent-category').value = '';
+            
+            updateParentCategorySelect();
+            displayHierarchyList();
+            rebuildChildToParentMap();
+            showNotification('Hlavná kategória pridaná');
+        }
+
+        function addChildCategory() {
+            const parent = document.getElementById('parent-category-select').value;
+            const name = document.getElementById('new-child-category').value.trim();
+            
+            if (!parent) {
+                alert('Vyberte hlavnú kategóriu');
+                return;
+            }
+            
+            if (!name) {
+                alert('Zadajte názov podkategórie');
+                return;
+            }
+            
+            const exists = Object.values(categoryHierarchy).some(children => 
+                children.includes(name)
+            );
+            
+            if (exists) {
+                alert('Táto podkategória už existuje');
+                return;
+            }
+            
+            categoryHierarchy[parent].push(name);
+            document.getElementById('new-child-category').value = '';
+            
+            displayHierarchyList();
+            rebuildChildToParentMap();
+            showNotification('Podkategória pridaná');
+        }
+
+        function deleteParentCategory(parent) {
+            if (!confirm(`Naozaj chcete odstrániť hlavnú kategóriu "${parent}" a všetky jej podkategórie?`)) {
+                return;
+            }
+            
+            delete categoryHierarchy[parent];
+            
+            updateParentCategorySelect();
+            displayHierarchyList();
+            rebuildChildToParentMap();
+            showNotification('Hlavná kategória odstránená');
+        }
+
+        function deleteChildCategory(parent, child) {
+            if (!confirm(`Naozaj chcete odstrániť podkategóriu "${child}"?`)) {
+                return;
+            }
+            
+            const index = categoryHierarchy[parent].indexOf(child);
+            if (index > -1) {
+                categoryHierarchy[parent].splice(index, 1);
+            }
+            
+            displayHierarchyList();
+            rebuildChildToParentMap();
+            showNotification('Podkategória odstránená');
+        }
+
+        function rebuildChildToParentMap() {
+            Object.keys(childToParent).forEach(key => delete childToParent[key]);
+            
+            Object.entries(categoryHierarchy).forEach(([parent, children]) => {
+                children.forEach(child => {
+                    childToParent[child] = parent;
+                });
+            });
+        }
+
+        function displayHierarchyList() {
+            const list = document.getElementById('hierarchy-list');
+            list.innerHTML = '';
+            
+            const sortedParents = Object.keys(categoryHierarchy).sort();
+            
+            sortedParents.forEach(parent => {
+                const parentDiv = document.createElement('div');
+                parentDiv.className = 'border-l-4 border-purple-500 pl-3 py-2';
+                
+                const parentHeader = document.createElement('div');
+                parentHeader.className = 'flex justify-between items-center bg-purple-100 p-2 rounded mb-1';
+                parentHeader.innerHTML = `
+                    <span class="font-semibold text-purple-800">📁 ${parent} (${categoryHierarchy[parent].length})</span>
+                    <button onclick="deleteParentCategory('${parent.replace(/'/g, "\\'")}', event)" 
+                            class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">
+                        🗑️ Odstrániť
+                    </button>
+                `;
+                parentDiv.appendChild(parentHeader);
+                
+                const children = categoryHierarchy[parent].sort();
+                children.forEach(child => {
+                    const childDiv = document.createElement('div');
+                    childDiv.className = 'flex justify-between items-center bg-gray-50 p-2 rounded ml-4 mb-1';
+                    childDiv.innerHTML = `
+                        <span class="text-gray-700">├─ ${child}</span>
+                        <button onclick="deleteChildCategory('${parent.replace(/'/g, "\\'")}', '${child.replace(/'/g, "\\'")}', event)" 
+                                class="px-2 py-1 text-xs bg-red-400 text-white rounded hover:bg-red-500">
+                            🗑️
+                        </button>
+                    `;
+                    parentDiv.appendChild(childDiv);
+                });
+                
+                list.appendChild(parentDiv);
+            });
+        }
+
+        function exportHierarchy() {
+            const hierarchyExport = {
+                categoryHierarchy: categoryHierarchy,
+                exportDate: new Date().toISOString()
+            };
+            
+            const json = JSON.stringify(hierarchyExport, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `hierarchia_kategorii_${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('Hierarchia exportovaná');
+        }
+
+        function importHierarchy(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    
+                    if (json.categoryHierarchy) {
+                        if (confirm('Naozaj chcete nahradiť aktuálnu hierarchiu?')) {
+                            categoryHierarchy = json.categoryHierarchy;
+                            rebuildChildToParentMap();
+                            updateParentCategorySelect();
+                            displayHierarchyList();
+                            populateCategoryFilter();
+                            showNotification('Hierarchia importovaná');
+                        }
+                    } else {
+                        alert('Neplatný formát súboru');
+                    }
+                } catch (error) {
+                    alert('Chyba pri načítaní súboru: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            event.target.value = '';
+        }
+
+        // ===== SPRÁVA ÚČTOV =====
+        
+        function showAccountsManager() {
+            document.getElementById('accounts-manager').classList.remove('hidden');
+            document.getElementById('rules-manager').classList.add('hidden');
+            document.getElementById('hierarchy-manager').classList.add('hidden');
+            displayAccountsList();
+        }
+
+        function hideAccountsManager() {
+            document.getElementById('accounts-manager').classList.add('hidden');
+        }
+
+        function updateAccountSelect() {
+            // Aktualizuj oba selecty
+            ['account-select', 'account-select-2'].forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (!select) return;
+                
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">-- Vyber účet --</option>';
+                
+                accounts.sort().forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account;
+                    option.textContent = account;
+                    select.appendChild(option);
+                });
+                
+                if (currentValue && accounts.includes(currentValue)) {
+                    select.value = currentValue;
+                }
+            });
+        }
+
+        function addAccount() {
+            const name = document.getElementById('new-account-name').value.trim();
+            
+            if (!name) {
+                alert('Zadajte názov účtu');
+                return;
+            }
+            
+            if (accounts.includes(name)) {
+                alert('Tento účet už existuje');
+                return;
+            }
+            
+            accounts.push(name);
+            document.getElementById('new-account-name').value = '';
+            
+            updateAccountSelect();
+            displayAccountsList();
+            showNotification('Účet pridaný');
+        }
+
+        function deleteAccount(account) {
+            if (!confirm(`Naozaj chcete odstrániť účet "${account}"?\n\nUpozornenie: Transakcie priradené k tomuto účtu zostanú zachované, ale účet nebude možné vybrať pri novom importe.`)) {
+                return;
+            }
+            
+            const index = accounts.indexOf(account);
+            if (index > -1) {
+                accounts.splice(index, 1);
+            }
+            
+            updateAccountSelect();
+            displayAccountsList();
+            showNotification('Účet odstránený');
+        }
+
+        function displayAccountsList() {
+            const list = document.getElementById('accounts-list');
+            list.innerHTML = '';
+            
+            if (accounts.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-center py-4">Žiadne účty</p>';
+                return;
+            }
+            
+            accounts.sort().forEach(account => {
+                // Spočítaj transakcie pre tento účet
+                const accountTransactions = allTransactions.filter(t => t.ucet === account);
+                const count = accountTransactions.length;
+                const balance = accountTransactions.reduce((sum, t) => sum + t.suma, 0);
+                
+                const accountDiv = document.createElement('div');
+                accountDiv.className = 'flex justify-between items-center bg-orange-50 p-3 rounded border-l-4 border-orange-500';
+                accountDiv.innerHTML = `
+                    <div class="flex-1">
+                        <div class="font-semibold text-orange-800">${account}</div>
+                        <div class="text-sm text-orange-600">${count} transakcií | Bilancia: ${balance.toFixed(2)} €</div>
+                    </div>
+                    <button onclick="deleteAccount('${account.replace(/'/g, "\\'")}', event)" 
+                            class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">
+                        🗑️ Odstrániť
+                    </button>
+                `;
+                list.appendChild(accountDiv);
+            });
+        }
+
+        function exportAccounts() {
+            const accountsExport = {
+                accounts: accounts,
+                exportDate: new Date().toISOString()
+            };
+            
+            const json = JSON.stringify(accountsExport, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `ucty_${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('Účty exportované');
+        }
+
+        function importAccounts(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    
+                    if (json.accounts) {
+                        if (confirm('Naozaj chcete nahradiť aktuálne účty?')) {
+                            accounts = json.accounts;
+                            updateAccountSelect();
+                            displayAccountsList();
+                            showNotification('Účty importované');
+                        }
+                    } else {
+                        alert('Neplatný formát súboru');
+                    }
+                } catch (error) {
+                    alert('Chyba pri načítaní súboru: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            event.target.value = '';
+        }
+
+        // Inicializácia pri načítaní stránky
+        window.addEventListener('DOMContentLoaded', function() {
+            updateAccountSelect();
+        });
+
+        // ===== GRAFY =====
+
+        // Prepínanie grafov
+        function toggleCharts() {
+            chartsVisible = !chartsVisible;
+            const section = document.getElementById('charts-section');
+            const button = document.getElementById('charts-toggle-text');
+            
+            if (chartsVisible) {
+                section.classList.remove('hidden');
+                button.textContent = 'Skryť grafy';
+                updateCharts();
+            } else {
+                section.classList.add('hidden');
+                button.textContent = 'Zobraziť grafy';
+            }
+        }
+
+        // Aktualizácia grafov
+        function updateCharts() {
+            if (!chartsVisible) return;
+            
+            updateCategoryPieChart();
+            updateIncomeExpenseChart();
+            updateTimelineChart();
+        }
+
+        // Koláčový graf kategórií
+        function updateCategoryPieChart() {
+            const categoryData = {};
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            includedTransactions.forEach(t => {
+                if (t.isDebit) {
+                    const cat = showGroupedCategories ? getParentCategory(t.kategoria) : t.kategoria;
+                    categoryData[cat] = (categoryData[cat] || 0) + Math.abs(t.suma);
+                }
+            });
+
+            const sortedData = Object.entries(categoryData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Top 10 kategórií
+
+            const labels = sortedData.map(([cat]) => cat);
+            const data = sortedData.map(([, sum]) => sum);
+            const colors = [
+                '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+                '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'
+            ];
+
+            if (categoryPieChart) {
+                categoryPieChart.destroy();
+            }
+
+            const ctx = document.getElementById('categoryPieChart').getContext('2d');
+            categoryPieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 10,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed.toFixed(2);
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${label}: ${value} € (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Stĺpcový graf príjmy vs výdavky
+        function updateIncomeExpenseChart() {
+            const monthlyData = {};
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            includedTransactions.forEach(t => {
+                if (!t.datum) return;
+                const month = t.datum.substring(0, 7);
+                if (!monthlyData[month]) {
+                    monthlyData[month] = { income: 0, expense: 0 };
+                }
+                if (t.isDebit) {
+                    monthlyData[month].expense += Math.abs(t.suma);
+                } else {
+                    monthlyData[month].income += t.suma;
+                }
+            });
+
+            const sortedMonths = Object.keys(monthlyData).sort();
+            const income = sortedMonths.map(m => monthlyData[m].income);
+            const expense = sortedMonths.map(m => monthlyData[m].expense);
+
+            if (incomeExpenseChart) {
+                incomeExpenseChart.destroy();
+            }
+
+            const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
+            incomeExpenseChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedMonths,
+                    datasets: [
+                        {
+                            label: 'Príjmy',
+                            data: income,
+                            backgroundColor: '#10b981',
+                            borderColor: '#059669',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Výdavky',
+                            data: expense,
+                            backgroundColor: '#ef4444',
+                            borderColor: '#dc2626',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(0) + ' €';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' €';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Časový vývoj bilancie
+        function updateTimelineChart() {
+            const monthlyData = {};
+            
+            const includedTransactions = filteredTransactions.filter(t => !isTransactionExcluded(t));
+            
+            includedTransactions.forEach(t => {
+                if (!t.datum) return;
+                const month = t.datum.substring(0, 7);
+                if (!monthlyData[month]) {
+                    monthlyData[month] = { income: 0, expense: 0 };
+                }
+                if (t.isDebit) {
+                    monthlyData[month].expense += Math.abs(t.suma);
+                } else {
+                    monthlyData[month].income += t.suma;
+                }
+            });
+
+            const sortedMonths = Object.keys(monthlyData).sort();
+            const balance = sortedMonths.map(m => monthlyData[m].income - monthlyData[m].expense);
+            
+            // Kumulatívna bilancia
+            let cumulative = 0;
+            const cumulativeBalance = balance.map(b => {
+                cumulative += b;
+                return cumulative;
+            });
+
+            if (timelineChart) {
+                timelineChart.destroy();
+            }
+
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            timelineChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedMonths,
+                    datasets: [
+                        {
+                            label: 'Mesačná bilancia',
+                            data: balance,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Kumulatívna bilancia',
+                            data: cumulativeBalance,
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(0) + ' €';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' €';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

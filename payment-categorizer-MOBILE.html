@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kategorizátor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f5; padding: 0.5rem; font-size: 14px; }
+        .upload-box { max-width: 600px; margin: 2rem auto; background: white; padding: 2rem; border-radius: 12px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .upload-icon { font-size: 3rem; margin-bottom: 1rem; }
+        label { display: inline-block; padding: 0.875rem 1.75rem; background: #2563eb; color: white; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px; }
+        label:hover { background: #1d4ed8; }
+        .header { background: white; padding: 0.875rem; margin-bottom: 0.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header h2 { font-size: 18px; font-weight: 700; }
+        .stats { font-size: 13px; color: #666; margin-top: 0.375rem; }
+        .transaction-card { background: white; margin-bottom: 0.5rem; padding: 0.875rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .transaction-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .transaction-date { font-size: 13px; color: #666; font-weight: 500; }
+        .transaction-amount { font-size: 16px; font-weight: 700; }
+        .amount-positive { color: #10b981; }  /* Jasnejšia zelená */
+        .amount-negative { color: #ef4444; }  /* Jasnejšia červená */
+        .transaction-desc { font-size: 14px; color: #374151; margin-bottom: 0.625rem; line-height: 1.4; word-wrap: break-word; }
+        select { width: 100%; padding: 0.625rem; border: 1.5px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white; font-weight: 500; }
+        select:focus { outline: none; border-color: #2563eb; }
+        .hidden { display: none; }
+        button { padding: 0.625rem; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        .btn-secondary { background: #6b7280; }
+        .btn-secondary:hover { background: #4b5563; }
+    </style>
+</head>
+<body>
+    <div id="upload-section" class="upload-box">
+        <div class="upload-icon">☁️</div>
+        <h2 style="margin-bottom: 0.75rem;">Nahrajte súbor s transakciami</h2>
+        <div id="rules-status" style="margin-bottom: 1rem; font-size: 13px; color: #666;">⏳ Načítavam pravidlá z GitHubu...</div>
+        <p style="color: #666; margin-bottom: 1.25rem;">Excel (.xlsx, .xls)</p>
+        <label for="file">📂 Vybrať súbor</label>
+        <input type="file" id="file" accept=".xlsx,.xls" style="display:none">
+    </div>
+    
+    <div id="transactions-section" class="hidden">
+        <div class="header">
+            <h2>Transakcie</h2>
+            <div class="stats" id="stats"></div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                <button onclick="exportAndShare()" style="flex: 1;">📤 Zdieľať</button>
+                <button onclick="location.reload()" class="btn-secondary">🔄</button>
+            </div>
+        </div>
+        <div id="transactions-list"></div>
+    </div>
+
+    <script>
+const categoryHierarchy = {"Auto a doprava": ["Auto a doprava - iné", "Kupa", "Parkovanie a poplatky", "Pohonné hmoty", "Poistenie auta", "Servis a náhradné diely", "Verejná doprava a taxi"], "Deti": ["Deti - iné", "Detský tovar a hračky", "Krúžky a aktivity", "Materská škola a opatrovateľka", "Škola a Školské potreby"], "Domácnosť": ["Chod domácnosti", "Dom a záhrada", "Domácnosť - iné", "Doplnky a vybavenie", "Hypotéka", "Kupa bytu", "Poistenie domácnosti", "Rekonstrukcia"], "Firemné": ["Firemné - iné", "Prevod na firemný účet", "Výdavky na podnikanie"], "Každodenné výdavky": ["Alkohol", "Cigarety", "Domáce Nieratá", "Každodenné výdavky - iné", "Potraviny a drogéria", "Reštaurácie", "Vyber hotovosti", "Výber hotovosti"], "Nepodstatné": ["Nepodstatné - iné", "Platba bude vratena", "Prevod medzi vlastnými účtami", "Splátka kreditnej karty"], "Osobné": ["Darčeky a dobročinnosť", "Elektronika", "Hudba, filmy, knihy a časopisy", "Kava", "Kzj", "Niekto za mna zaplatil", "Oblečenie a obuv", "Online služby", "Osobné - iné", "Svadba", "Vraciam peniaze", "Vzdelávanie", "Zdravie a krása"], "Platby": ["Dane", "Elektrina", "Kurenie", "Nájomné a prenájom", "Platby - iné", "Plyn", "Poistenie", "Poplatky a úroky", "Preposielanie", "Splátky", "Televízia, internet, telefón", "Vodné a stočné"], "Príjmy": ["Bonusy a prémie", "Botox", "Bývanie", "Dar", "Fakturácia", "Investície", "Mzda", "Poistné plnenie", "Predaj", "Pripísanie úveru", "Príjmy - iné", "Rodinne pridavky", "Vratene prachy", "Úroky"], "Zábava": ["Akcie a udalosti", "Cestovanie", "Zábava - iné", "Šport a hobby"], "Úspory a investície": ["Akcie", "Fondy", "Pozicka", "Pravidelné sporenie", "Vklady a sporenie", "prejt", "Úspory a investície - iné"]};
+let categoryRules = {
+    "Parkovanie a poplatky": {
+        "transactionTypes": [],
+        "keywords": [
+            "PARKING",
+            "PARKOV"
+        ]
+    },
+    "Pohonné hmoty": {
+        "transactionTypes": [],
+        "keywords": [
+            "SLOVNAFT",
+            "OMV",
+            "SHELL",
+            "ESSO"
+        ]
+    },
+    "Verejná doprava a taxi": {
+        "transactionTypes": [],
+        "keywords": [
+            "ZSSK",
+            "ZELEZNICNA"
+        ]
+    },
+    "Akcie a udalosti": {
+        "transactionTypes": [],
+        "keywords": [
+            "TICKETS",
+            "TICKETPORTA",
+            "CINEMAX",
+            "DIVADLO",
+            "MUSEUM",
+            "VIOLA",
+            "KULT"
+        ]
+    },
+    "Cestovanie": {
+        "transactionTypes": [],
+        "keywords": [
+            "HOTEL",
+            "BOOKING",
+            "AIRBNB",
+            "AIRPORT",
+            "AIRLINE"
+        ]
+    },
+    "Šport a hobby": {
+        "transactionTypes": [],
+        "keywords": [
+            "DECATHLON",
+            "SPORTRYSY",
+            "SPORT TRADING",
+            "BERGFREUNDE",
+            "AQUACITY",
+            "CVICISKO",
+            "4CAMPING",
+            "TATRA GYM",
+            "SPORTISIMO",
+            "SPORT",
+			"GOPASS"
+        ]
+    },
+    "Detský tovar a hračky": {
+        "transactionTypes": [],
+        "keywords": [
+            "HRACKY",
+            "POMPO",
+            "4TOYS",
+            "SUPER ZOO",
+            "STONOZ"
+        ]
+    },
+    "Krúžky a aktivity": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Materská škola a opatrovateľka": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Škola a Školské potreby": {
+        "transactionTypes": [],
+        "keywords": [
+            "MARTINUS",
+            "PAPYRUS",
+            "PANTA RHEI",
+            "KNIHKUPECTVO",
+            "TITI PAPIER"
+        ]
+    },
+    "Deti - iné": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Chod domácnosti": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Dom a záhrada": {
+        "transactionTypes": [],
+        "keywords": [
+            "AUPARK",
+            "FORUM",
+            "OBI",
+            "JYSK",
+            "OZETA"
+        ]
+    },
+    "Doplnky a vybavenie": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Hypotéka": [
+        {
+            "transactionTypes": [
+                "INKASO"
+            ],
+            "keywords": []
+        },
+        {
+            "keywords": [
+                "HYPO",
+                "JAN HUDAK"
+            ]
+        }
+    ],
+    "Potraviny a drogéria": {
+        "transactionTypes": [],
+        "keywords": [
+            "BILLA",
+            "LIDL",
+            "KAUFLAND",
+            "TESCO",
+            "COOP",
+            "POTRAVINY",
+            "SUPERMARKET",
+            "CARREFOUR",
+            "EUROSPIN",
+            "MERCADONA",
+            "OZ ZDROJ",
+            "AGRO",
+            "DM",
+            "TETA DROGERIA",
+            "REMESELNA",
+            "SUPERMERC",
+            "PEKAR",
+            "DROGE",
+            "ZDROJ",
+            "DVOR",
+            "KNIZK",
+            "FARMFOODS"
+        ]
+    },
+    "Reštaurácie": {
+        "transactionTypes": [],
+        "keywords": [
+            "ANGRY CHEF",
+            "ALFA BAR",
+            "BENOVSKY",
+            "BISTRO",
+            "CAFE",
+            "COFFEE",
+            "FELKA",
+            "KUSZMANNOV",
+            "PIZZA",
+            "RESTAURANT",
+            "MIKI STREET",
+            "BAKOS",
+            "ESPRESSO",
+            "KAVIAREN",
+            "LEMBERG",
+            "SOREN",
+            "WOLT",
+            "FAJNA RYBKA",
+            "KREDENCEK",
+            "KOLIBA",
+            "ALFA",
+            "MINIT",
+            "SEPTIM",
+            "KRAKE",
+            "VINOT",
+            "GELATERI",
+            "CAFF",
+            "RESTA",
+            "SUSHI",
+            "RISTO",
+            "RYBKA"
+        ]
+    },
+    "Vyber hotovosti": {
+        "transactionTypes": [
+            "ATM WITHDRAWAL",
+            "VYBER HOTOVOSTI"
+        ],
+        "keywords": []
+    },
+    "Každodenné výdavky - iné": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Darčeky a dobročinnosť": {
+        "transactionTypes": [],
+        "keywords": [
+            "DOBRY ANJEL",
+            "KOMPENZACIA VASHO DARU"
+        ]
+    },
+    "Elektronika": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Hudba, filmy, knihy a časopisy": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Kava": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Niekto za mna zaplatil": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Oblečenie a obuv": {
+        "transactionTypes": [],
+        "keywords": [
+            "ABOUT YOU",
+            "H&M",
+            "RESERVED",
+            "VINTED",
+            "ANSWEAR",
+            "LINDEX",
+            "UNIFORMSHOP",
+            "ECCO",
+            "WOJAS",
+            "TOMMY HILFI",
+            "BELENKA",
+            "BOSONOZKA",
+            "NABOSO",
+            "SHAPENBAREFOOT",
+            "XEROSHOES",
+            "ALANDO",
+            "BEPON",
+            "ABOUTYOU"
+        ]
+    },
+    "Online služby": {
+        "transactionTypes": [],
+        "keywords": [
+            "GOOGLE PLAY",
+            "GOPAY",
+            "DISNEY",
+            "SPOTIFY",
+            "RADOST",
+            "HEADWAY",
+            "MAMAGANG",
+            "HEROHERO",
+            "GOOGLE~PLAY"
+        ]
+    },
+    "Vraciam peniaze": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Vzdelávanie": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Zdravie a krása": {
+        "transactionTypes": [],
+        "keywords": [
+            "LEKAREN",
+            "FARMACIA",
+            "OPTIKA",
+            "HPA",
+            "SAVONERIA",
+            "TCHIBO",
+            "NOTINO",
+            "PARFUMERIE",
+            "TERAP",
+			"AVITA",
+			"BENU",
+            "DR.MAX"
+        ]
+    },
+    "Osobné - iné": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Dane": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Poplatky a úroky": {
+        "transactionTypes": [],
+        "keywords": ["VEDENIE KONTA","POPLAT"]
+    },
+    "Preposielanie": {
+        "transactionTypes": [],
+        "keywords": [
+            "POSTA",
+            "POST OFFICE",
+            "PACKETA"
+        ]
+    },
+    "Splátky": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Televízia, internet, telefón": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Pravidelné sporenie": {
+        "transactionTypes": [],
+        "keywords": [
+            "SPOREN"
+        ]
+    },
+    "Prevod medzi vlastnými účtami": {
+        "transactionTypes": [],
+        "keywords": [
+            "PREVOD",
+            "DOROVNANIE"
+        ]
+    },
+    "Bonusy a prémie": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Dar": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Fakturácia": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Mzda": {
+        "transactionTypes": [],
+        "keywords": [
+            "MZDA",
+            "VYPLATA",
+            "LUMICK",
+            "VKLAD",
+            "DENTAKRA"
+        ]
+    },
+    "Pripísanie úveru": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Úroky": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Vratene prachy": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Botox": {
+        "transactionTypes": [],
+        "keywords": [
+            "BOTOX",
+            "BTX",
+            "SUSTROVA"
+        ]
+    },
+    "Ostatné": {
+        "transactionTypes": [],
+        "keywords": []
+    },
+    "Bankové poplatky": {
+        "transactionTypes": [
+            "REFUNDED FEES"
+        ],
+        "keywords": [
+            "VEDENIE KONTA"
+        ]
+    }
+};
+
+let transactions = [];
+
+function getParentCategory(subcategory) {
+    for (const [parent, children] of Object.entries(categoryHierarchy)) {
+        if (children.includes(subcategory)) return parent;
+    }
+    return null;
+}
+
+function formatEuroAmount(amount) {
+    if (isNaN(amount)) return '0,00 €';
+    const formatted = new Intl.NumberFormat('de-DE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(Math.abs(amount));
+    const sign = amount >= 0 ? '+' : '-';
+    return sign + formatted + ' €';
+}
+
+
+function removeDiacritics(text) {
+    // Normalizuje a odstráni diakritiku
+    return text.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function excelDateToJS(serial) {
+    if (!serial || isNaN(serial)) return '';
+    const epoch = new Date(1899, 11, 30);
+    const days = Math.floor(serial);
+    const date = new Date(epoch.getTime() + days * 86400000);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return day + '.' + month + '.' + year;
+}
+
+// KATEGORIZAČNÁ LOGIKA
+function categorizeTransaction(typ, popis) {
+    // Odstráň diakritiku a urob uppercase
+    const popisUpper = removeDiacritics(popis.toUpperCase());
+    const typUpper = removeDiacritics(typ.toUpperCase());
+    
+    console.log('Kategorizujem:', typ, '|', popis.substring(0, 30));
+    
+    for (const [categoryName, rules] of Object.entries(categoryRules)) {
+        // Ak je pole pravidiel
+        if (Array.isArray(rules)) {
+            for (const rule of rules) {
+                if (matchRule(rule, typUpper, popisUpper)) {
+                    console.log('  → Match:', categoryName, '(pole pravidiel)');
+                    return categoryName;
+                }
+            }
+        } else {
+            // Jedno pravidlo
+            if (matchRule(rules, typUpper, popisUpper)) {
+                console.log('  → Match:', categoryName);
+                return categoryName;
+            }
+        }
+    }
+    
+    console.log('  → Nekategorizované');
+    return 'Nekategorizované';
+}
+
+function containsKeyword(text, keyword) {
+    if (!keyword || !text) return false;
+    const normText = removeDiacritics(text.toUpperCase()).replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ');
+    const normKeyword = removeDiacritics(keyword.toUpperCase()).replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!normKeyword) return false;
+    if (normKeyword.includes(' ')) {
+        return normText.includes(normKeyword);
+    }
+    const regex = new RegExp('(?<![A-Z0-9])' + normKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Z0-9])');
+    return regex.test(normText);
+}
+
+function matchRule(rule, typUpper, popisUpper) {
+    const hasTypes = rule.transactionTypes && rule.transactionTypes.length > 0;
+    const hasKeywords = rule.keywords && rule.keywords.length > 0;
+    
+    // Ak nie je ANI typ ANI keyword, je to neplatné pravidlo
+    if (!hasTypes && !hasKeywords) {
+        return false;
+    }
+    
+    let typeMatch = false;
+    let keywordMatch = false;
+    
+    // Kontrola typu (len ak sú definované)
+    if (hasTypes) {
+        for (const ruleType of rule.transactionTypes) {
+            const ruleTypeNormalized = removeDiacritics(ruleType.toUpperCase());
+            if (typUpper.includes(ruleTypeNormalized)) {
+                typeMatch = true;
+                break;
+            }
+        }
+    }
+    
+    // Kontrola keywords (len ak sú definované)
+    if (hasKeywords) {
+        for (const keyword of rule.keywords) {
+            if (containsKeyword(popisUpper, keyword)) {
+                keywordMatch = true;
+                break;
+            }
+        }
+    }
+    
+    // AND alebo OR
+    if (rule.requireBoth) {
+        // AND: Obe musia matchovať (ak sú definované)
+        return (hasTypes ? typeMatch : true) && (hasKeywords ? keywordMatch : true);
+    } else {
+        // OR: Aspoň jedno musí matchovať
+        return typeMatch || keywordMatch;
+    }
+}
+
+document.getElementById('file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const allRows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+            
+            // Nájdi hlavičku
+            let headerRow = -1;
+            for (let i = 0; i < Math.min(20, allRows.length); i++) {
+                const row = allRows[i];
+                if (row && row[0] && String(row[0]).includes('Dátum')) {
+                    headerRow = i;
+                    break;
+                }
+            }
+            
+            if (headerRow === -1) {
+                alert('Nenašiel som hlavičku');
+                return;
+            }
+            
+            const dataRows = allRows.slice(headerRow + 1);
+            console.log('Načítaných transakcií:', dataRows.length);
+            
+            transactions = dataRows.filter(row => row && row[0]).map(row => {
+                let datum = row[0] ? String(row[0]) : '';
+                if (typeof datum === 'number') datum = excelDateToJS(datum);
+                
+                // Detekuj formát banky podľa hlavičky
+                const headerCols = allRows[headerRow].map(c => String(c || '').trim());
+                const isPrimabanka = headerCols.includes('Zostatok po transakcii') ||
+                                     (headerCols[2] === 'Suma' && headerCols[4] === 'Popis');
+                
+                let typ, popis, suma, originalPopis;
+                
+                if (isPrimabanka) {
+                    // Primabanka: [Dátum, Valuta, Suma, Mena, Popis, Doplňujúca informácia, Zostatok]
+                    let sumaRaw = row[2] != null ? row[2] : 0;
+                    suma = typeof sumaRaw === 'number' ? sumaRaw : parseFloat(String(sumaRaw).replace(/\s+/g,'').replace(',','.').replace('−','-')) || 0;
+                    originalPopis = row[4] ? String(row[4]).trim() : '';
+                    const cardMatch = originalPopis.match(/^Platba kartou[^,]*,\s*[^,]*,\s*([^,]+)/i);
+                    if (cardMatch) {
+                        typ = originalPopis;
+                        popis = cardMatch[1].replace(/\s+\d{2}\.\d{2}\.\s*$/, '').trim();
+                    } else if (/^SK\w{20,}/.test(originalPopis)) {
+                        typ = originalPopis;
+                        popis = originalPopis.replace(/^SK\w+\s+/, '').replace(/\s{2,}.*/, '').trim() || originalPopis;
+                    } else {
+                        typ = originalPopis;
+                        popis = originalPopis;
+                    }
+                } else {
+                    // mBank / VÚB: [Dátum, Typ, Popis, Suma]
+                    typ = row[1] ? String(row[1]) : '';
+                    popis = row[2] ? String(row[2]) : '';
+                    originalPopis = popis;
+                    let sumaStr = row[3] ? String(row[3]) : '0';
+                    sumaStr = sumaStr.replace(/\s+/g, '').replace(/\./g, '').replace(',', '.');
+                    suma = parseFloat(sumaStr.replace('−', '-'));
+                }
+                
+                const kategoria = categorizeTransaction(typ, originalPopis);
+                
+                return { datum, popis, suma, typ, kategoria };
+            });
+            
+            console.log('Celkom spracovaných:', transactions.length);
+            zobrazTransakcie();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Chyba: ' + error.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+});
+
+function zobrazTransakcie() {
+    const list = document.getElementById('transactions-list');
+    list.innerHTML = '';
+    
+    const sorted = transactions.slice().sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+    
+    const total = sorted.length;
+    const kategorized = sorted.filter(t => t.kategoria !== 'Nekategorizované').length;
+    document.getElementById('stats').textContent = 'Celkom: ' + total + ' | Kategorizované: ' + kategorized + ' | Nekategorizované: ' + (total - kategorized);
+    
+    sorted.forEach((t, index) => {
+        const card = document.createElement('div');
+        card.className = 'transaction-card';
+        
+        const amountClass = t.suma >= 0 ? 'amount-positive' : 'amount-negative';
+        
+        const header = document.createElement('div');
+        header.className = 'transaction-header';
+        header.innerHTML = '<div class="transaction-date">' + t.datum + '</div><div class="transaction-amount ' + amountClass + '">' + formatEuroAmount(t.suma) + '</div>';
+        
+        const desc = document.createElement('div');
+        desc.className = 'transaction-desc';
+        desc.textContent = t.popis;
+        
+        const select = document.createElement('select');
+        select.onchange = function() { transactions[index].kategoria = this.value; };
+        
+        let html = '<option value="Nekategorizované">Nekategorizované</option>';
+        const mainCategories = Object.keys(categoryHierarchy).sort();
+        mainCategories.forEach(mainCat => {
+            html += '<optgroup label="' + mainCat + '">';
+            const subcategories = categoryHierarchy[mainCat].sort();
+            subcategories.forEach(subCat => {
+                const sel = subCat === t.kategoria ? ' selected' : '';
+                html += '<option value="' + subCat + '"' + sel + '>' + subCat + '</option>';
+            });
+            html += '</optgroup>';
+        });
+        select.innerHTML = html;
+        
+        card.appendChild(header);
+        card.appendChild(desc);
+        card.appendChild(select);
+        list.appendChild(card);
+    });
+    
+    document.getElementById('upload-section').classList.add('hidden');
+    document.getElementById('transactions-section').classList.remove('hidden');
+}
+
+async function exportAndShare() {
+    try {
+        const wb = XLSX.utils.book_new();
+        const exportData = transactions.map(t => ({
+            'Dátum': t.datum,
+            'Popis': t.popis,
+            'Suma': t.suma,
+            'Typ': t.typ,
+            'Kategória': t.kategoria,
+            'Hlavná kategória': getParentCategory(t.kategoria) || ''
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Transakcie');
+        
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        const today = new Date().toISOString().split('T')[0];
+        const fileName = 'transakcie_' + today + '.xlsx';
+        
+        if (navigator.share && navigator.canShare) {
+            try {
+                const file = new File([blob], fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({ title: 'Kategorizované transakcie', files: [file] });
+                    return;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+            }
+        }
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+    } catch (error) {
+        alert('Chyba pri exporte');
+    }
+}
+const ONEDRIVE_RULES_URL = 'https://tomtor55.github.io/json-data/rules_20260421.json';
+
+async function loadRulesFromOneDrive() {
+    const statusEl = document.getElementById('rules-status');
+    try {
+        const response = await fetch(ONEDRIVE_RULES_URL);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        if (json.categoryRules) {
+            categoryRules = json.categoryRules;
+            const now = new Date().toLocaleTimeString('sk-SK');
+            statusEl.innerHTML = `✅ Pravidlá z GitHubu (${Object.keys(categoryRules).length} kategórií, ${now})`;
+            statusEl.style.color = '#10b981';
+        } else {
+            throw new Error('Neplatný formát');
+        }
+    } catch (error) {
+        statusEl.innerHTML = `⚠️ GitHub nedostupný — používam vbudované pravidlá`;
+        statusEl.style.color = '#f59e0b';
+    }
+}
+
+loadRulesFromOneDrive();
+    </script>
+</body>
+</html>
