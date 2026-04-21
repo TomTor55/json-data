@@ -1,0 +1,380 @@
+{
+  "categoryRules": {
+    "Parkovanie a poplatky": {
+      "transactionTypes": [],
+      "keywords": [
+        "PARKING",
+        "PARKOV"
+      ]
+    },
+    "Pohonné hmoty": {
+      "transactionTypes": [],
+      "keywords": [
+        "SLOVNAFT",
+        "OMV",
+        "SHELL",
+        "ESSO"
+      ]
+    },
+    "Verejná doprava a taxi": {
+      "transactionTypes": [],
+      "keywords": [
+        "ZSSK",
+        "ZELEZNICNA"
+      ]
+    },
+    "Akcie a udalosti": {
+      "transactionTypes": [],
+      "keywords": [
+        "TICKETS",
+        "TICKETPORTA",
+        "CINEMAX",
+        "DIVADLO",
+        "MUSEUM",
+        "VIOLA",
+        "KULT"
+      ]
+    },
+    "Cestovanie": {
+      "transactionTypes": [],
+      "keywords": [
+        "HOTEL",
+        "BOOKING",
+        "AIRBNB",
+        "AIRPORT",
+        "AIRLINE"
+      ]
+    },
+    "Šport a hobby": {
+      "transactionTypes": [],
+      "keywords": [
+        "DECATHLON",
+        "SPORTRYSY",
+        "SPORT TRADING",
+        "BERGFREUNDE",
+        "AQUACITY",
+        "CVICISKO",
+        "4CAMPING",
+        "TATRA GYM",
+        "SPORTISIMO",
+        "SPORT"
+      ]
+    },
+    "Detský tovar a hračky": {
+      "transactionTypes": [],
+      "keywords": [
+        "HRACKY",
+        "POMPO",
+        "4TOYS",
+        "SUPER ZOO",
+        "STONOZ",
+	"TEDI"
+      ]
+    },
+    "Krúžky a aktivity": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Materská škola a opatrovateľka": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Škola a Školské potreby": {
+      "transactionTypes": [],
+      "keywords": [
+        "MARTINUS",
+        "PAPYRUS",
+        "PANTA RHEI",
+        "KNIHKUPECTVO",
+        "TITI PAPIER"
+      ]
+    },
+    "Deti - iné": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Chod domácnosti": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Dom a záhrada": {
+      "transactionTypes": [],
+      "keywords": [
+        "AUPARK",
+        "FORUM",
+        "OBI",
+        "JYSK",
+        "OZETA"
+      ]
+    },
+    "Doplnky a vybavenie": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Hypotéka": {
+      "transactionTypes": [],
+      "keywords": [
+        "HYPO",
+        "VÚB",
+        "JAN HUDAK",
+        "JÁN HUDÁK"
+      ]
+    },
+    "Potraviny a drogéria": {
+      "transactionTypes": [],
+      "keywords": [
+        "BILLA",
+        "LIDL",
+        "KAUFLAND",
+        "TESCO",
+        "COOP",
+        "POTRAVINY",
+        "SUPERMARKET",
+        "CARREFOUR",
+        "EUROSPIN",
+        "MERCADONA",
+        "OZ ZDROJ",
+        "AGRO",
+        "DM",
+        "BENU",
+        "DR.MAX",
+        "TETA DROGERIA",
+        "REMESELNA",
+        "SUPERMERC",
+        "PEKAR",
+        "DROGE",
+        "ZDROJ",
+        "DVOR",
+        "KNIZK",
+        "FARMFOODS",
+		"TERNO"
+      ]
+    },
+    "Reštaurácie": {
+      "transactionTypes": [],
+      "keywords": [
+        "ANGRY CHEF",
+        "ALFA BAR",
+        "BENOVSKY",
+        "BISTRO",
+        "CAFE",
+        "COFFEE",
+        "FELKA",
+        "KUSZMANNOV",
+        "PIZZA",
+        "RESTAURANT",
+        "MIKI STREET",
+        "BAKOS",
+        "ESPRESSO",
+        "KAVIAREN",
+        "LEMBERG",
+        "SOREN",
+        "WOLT",
+        "FAJNA RYBKA",
+        "KREDENCEK",
+        "KOLIBA",
+        "ALFA",
+        "MINIT",
+        "SEPTIM",
+        "KRAKE",
+        "VINOT",
+        "GELATERI",
+        "CAFF",
+        "RESTA",
+        "SUSHI",
+        "RISTO",
+        "RYBKA"
+      ]
+    },
+    "Vyber hotovosti": {
+      "transactionTypes": [
+        "ATM WITHDRAWAL",
+        "VYBER HOTOVOSTI"
+      ],
+      "keywords": []
+    },
+    "Každodenné výdavky - iné": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Darčeky a dobročinnosť": {
+      "transactionTypes": [],
+      "keywords": [
+        "DOBRÝ ANJEL",
+        "KOMPENZÁCIA VÁŠHO DARU"
+      ]
+    },
+    "Elektronika": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Hudba, filmy, knihy a časopisy": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Kava": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Niekto za mna zaplatil": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Oblečenie a obuv": {
+      "transactionTypes": [],
+      "keywords": [
+        "ABOUT YOU",
+        "H&M",
+        "RESERVED",
+        "VINTED",
+        "ANSWEAR",
+        "LINDEX",
+        "UNIFORMSHOP",
+        "ECCO",
+        "WOJAS",
+        "TOMMY HILFI",
+        "BELENKA",
+        "BOSONOZKA",
+        "NABOSO",
+        "SHAPENBAREFOOT",
+        "XEROSHOES",
+        "ALANDO",
+        "BEPON",
+        "ABOUTYOU"
+      ]
+    },
+    "Online služby": {
+      "transactionTypes": [],
+      "keywords": [
+        "GOOGLE PLAY",
+        "GOPAY",
+        "DISNEY",
+        "SPOTIFY",
+        "RADOST",
+        "HEADWAY",
+        "MAMAGANG",
+        "HEROHERO",
+        "GOOGLE~PLAY"
+      ]
+    },
+    "Vraciam peniaze": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Vzdelávanie": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Zdravie a krása": {
+      "transactionTypes": [],
+      "keywords": [
+        "LEKAREN",
+        "FARMACIA",
+        "OPTIKA",
+        "HPA",
+        "SAVONERIA",
+        "TCHIBO",
+        "NOTINO",
+        "PARFUMERIE",
+        "TERAP"
+      ]
+    },
+    "Osobné - iné": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Dane": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Poplatky a úroky": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Preposielanie": {
+      "transactionTypes": [],
+      "keywords": [
+        "POSTA",
+        "POST OFFICE",
+        "PACKETA"
+      ]
+    },
+    "Splátky": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Televízia, internet, telefón": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Pravidelné sporenie": {
+      "transactionTypes": [],
+      "keywords": [
+        "SPOREN"
+      ]
+    },
+    "Prevod medzi vlastnými účtami": {
+      "transactionTypes": [],
+      "keywords": [
+        "PREVOD",
+        "DOROVNANIE",
+		"TOMAS TORBA TRANSFER"
+      ]
+    },
+    "Bonusy a prémie": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Dar": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Fakturácia": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Mzda": {
+      "transactionTypes": [],
+      "keywords": [
+        "MZDA",
+        "VYPLATA",
+        "LUMICK",
+        "VKLAD",
+        "DENTAKRA"
+      ]
+    },
+    "Pripísanie úveru": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Úroky": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Vratene prachy": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Botox": {
+      "transactionTypes": [],
+      "keywords": [
+        "BOTOX",
+        "BTX",
+        "SUSTROVA"
+      ]
+    },
+    "Ostatné": {
+      "transactionTypes": [],
+      "keywords": []
+    },
+    "Bankové poplatky": {
+      "transactionTypes": [
+        "REFUNDED FEES"
+      ],
+      "keywords": [
+        "VEDENIE KONTA"
+      ]
+    }
+  },
+  "exportDate": "2026-01-23T13:02:34.985Z"
+}
