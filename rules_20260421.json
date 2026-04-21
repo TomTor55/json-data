@@ -42,7 +42,9 @@
         "BOOKING",
         "AIRBNB",
         "AIRPORT",
-        "AIRLINE"
+        "AIRLINE",
+        "RYANAIR",
+        "WIZZAIR",
       ]
     },
     "Šport a hobby": {
@@ -147,7 +149,7 @@
         "DVOR",
         "KNIZK",
         "FARMFOODS",
-		"TERNO"
+		    "TERNO"
       ]
     },
     "Reštaurácie": {
